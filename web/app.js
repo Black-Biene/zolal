@@ -133,6 +133,16 @@ for (const peek of document.querySelectorAll(".peek")) {
   };
 }
 
+// Step 2 is either files or typed text; only the chosen one is shown and hidden.
+for (const radio of document.querySelectorAll('input[name="what"]')) {
+  radio.addEventListener("change", () => {
+    const text = radio.value === "text" && radio.checked;
+    $("what-files").hidden = text;
+    $("what-text").hidden = !text;
+    (text ? $("hide-message") : $("hide-payload")).focus();
+  });
+}
+
 // ---- cover file: pass through what the engine takes, convert what it doesn't ---------------------------
 //
 // The engine hides in JPEG, MP4, PDF and MP3. Other photos are redrawn as JPEG; a MOV is relabelled as MP4,
@@ -280,11 +290,14 @@ const VERDICT = {
 const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
 
 $("hide").onclick = async () => {
-  const box = $("hide-status"), carrier = $("hide-carrier").files[0], payloads = [...$("hide-payload").files];
-  const message = $("hide-message").value, pass = $("hide-pass").value;
+  const textMode = document.querySelector('input[name="what"]:checked').value === "text";
+  const box = $("hide-status"), carrier = $("hide-carrier").files[0];
+  const payloads = textMode ? [] : [...$("hide-payload").files];
+  const message = textMode ? $("hide-message").value : "", pass = $("hide-pass").value;
   const hasMessage = message.trim() !== "";
   if (!carrier) return show(box, "err", "Step 1: choose a cover file first.");
-  if (!payloads.length && !hasMessage) return show(box, "err", "Step 2: add a file or photo, or write a message.");
+  if (textMode && !hasMessage) return show(box, "err", "Step 2: type the text to hide.");
+  if (!textMode && !payloads.length) return show(box, "err", "Step 2: choose the files to hide.");
   if (!pass) return show(box, "err", "Step 3: set a passphrase.");
 
   const button = $("hide");
@@ -299,7 +312,6 @@ $("hide").onclick = async () => {
     busy(box, "Encrypting and hiding…");
     await paint();
 
-    // The message goes first so it keeps its name; a file that happens to share it gets " (2)".
     const items = [...(hasMessage ? [{ name: MESSAGE }] : []), ...payloads];
     const names = uniqueNames(items);
     const files = { [CARRIER]: cover.data };
@@ -314,14 +326,13 @@ $("hide").onclick = async () => {
     }
     download(cover.name, out.data);
 
-    const what = [hasMessage && "your message", payloads.length && plural(payloads.length, "file")]
-      .filter(Boolean).join(" and ");
+    const what = hasMessage ? "your text" : plural(payloads.length, "file");
     const m = r.stdout.join("\n").match(/size .+ -> .+ \(x[\d.]+, (\w+)\)/);
     const [kind, note] = VERDICT[m?.[1]] ?? VERDICT.Natural;
     const again = el("button", "again", `Download ${cover.name} again`);
     again.onclick = () => download(cover.name, out.data);
     show(box, kind,
-      [strong("Done. "), `${what[0].toUpperCase() + what.slice(1)} ${what.includes(" and ") || payloads.length > 1 ? "are" : "is"} ` +
+      [strong("Done. "), `${what[0].toUpperCase() + what.slice(1)} ${payloads.length > 1 ? "are" : "is"} ` +
         `hidden in ${cover.name}, which has been downloaded.`],
       ...(cover.note ? [el("p", "small", cover.note)] : []),
       el("p", "small", `${human(cover.data.length)} → ${human(out.data.length)}. ${note}`),
@@ -362,7 +373,7 @@ $("reveal").onclick = async () => {
       b.onclick = () => download(name, f.data);
       return el("li", "", el("span", "name", name), el("span", "size", human(f.data.length)), b);
     }));
-    const what = [msg && "a message", rest.length && plural(rest.length, "file")].filter(Boolean).join(" and ");
+    const what = [msg && "text", rest.length && plural(rest.length, "file")].filter(Boolean).join(" and ");
     show(box, "ok", [strong("Found "), what + "."],
       ...(msg ? [el("div", "message", new TextDecoder().decode(msg[1].data))] : []),
       ...(rest.length ? [list] : []));

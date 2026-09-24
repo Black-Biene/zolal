@@ -32,7 +32,7 @@
   </div>
 
   <section id="panel-hide" role="tabpanel" aria-labelledby="tab-hide">
-    <p class="lead">Hide files or a message inside an ordinary photo, video, song or PDF. You get back a file that
+    <p class="lead">Hide files or text inside an ordinary photo, video, song or PDF. You get back a file that
     still opens normally.</p>
 
     <ol class="steps">
@@ -52,7 +52,11 @@
         <h2 class="step-title"><span class="num" aria-hidden="true">2</span> Add what to hide</h2>
         <fieldset id="step2" disabled>
           <legend class="locked-note">Choose a cover file first.</legend>
-          <label class="drop" data-for="hide-payload">
+          <div class="switch" role="radiogroup" aria-label="What to hide">
+            <label><input type="radio" name="what" value="files" checked> Files</label>
+            <label><input type="radio" name="what" value="text"> Text</label>
+          </div>
+          <label class="drop" data-for="hide-payload" id="what-files">
             <input id="hide-payload" type="file" multiple>
             <svg class="drop-icon" viewBox="0 0 24 24" width="44" height="44" fill="none" stroke="currentColor" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><rect x="9" y="12" width="6" height="5" rx="1"/><path d="M10.5 12v-1.5a1.5 1.5 0 0 1 3 0V12"/></svg>
             <span class="drop-text">
@@ -60,8 +64,10 @@
               <span class="drop-hint">Photos, videos, documents, anything. They're encrypted before they go in.</span>
             </span>
           </label>
-          <label class="message-label" for="hide-message">Message <span class="opt">(optional)</span></label>
-          <textarea id="hide-message" rows="4" spellcheck="false" placeholder="Write a note to hide along with the files, or on its own."></textarea>
+          <div id="what-text" hidden>
+            <label class="sr-only" for="hide-message">Text to hide</label>
+            <textarea id="hide-message" rows="6" spellcheck="false" placeholder="Type or paste the text to hide."></textarea>
+          </div>
         </fieldset>
       </li>
 
