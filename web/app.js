@@ -9,6 +9,9 @@ wasm.catch(() => {
   show($("hide-status"), "err", [strong("Couldn't load. "), "Check your connection and reload the page."]);
 });
 
+// On phones the "send as a file" tip starts folded to one line, so the whole form fits on one screen.
+if (matchMedia("(max-width: 600px)").matches) $("send-tip").open = false;
+
 // Lets the page open again without a connection once it has been visited.
 if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
 
@@ -48,6 +51,7 @@ const strong = t => el("strong", "", t);
 function show(box, kind, ...paras) {
   box.className = "status " + kind;
   box.replaceChildren(...paras.map(p => p instanceof Node ? p : el("p", "", ...[p].flat())));
+  box.scrollIntoView({ block: "nearest", behavior: "smooth" });
 }
 function busy(box, text) {
   box.className = "status busy";

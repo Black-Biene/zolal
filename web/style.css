@@ -99,12 +99,15 @@ textarea:focus { outline: 0; border-color: var(--accent); box-shadow: 0 0 0 3px 
 .hint { color: var(--muted); font-size: .88rem; margin: 6px 0 0 }
 
 .callout {
-  display: flex; gap: 12px; align-items: flex-start; margin: 0 0 20px; padding: 14px 16px; border-radius: 12px;
+  margin: 0 0 20px; padding: 14px 16px; border-radius: 12px;
   background: var(--warn-soft); border: 1px solid var(--warn-line); font-size: .92rem;
 }
+.callout summary { display: flex; gap: 12px; align-items: flex-start; list-style: none; cursor: pointer }
+.callout summary::-webkit-details-marker { display: none }
 .callout svg { flex: none; width: 22px; height: 22px; margin-top: 1px; fill: none; stroke: var(--warn); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round }
-.callout p { margin: 0 }
-.callout strong { color: var(--warn); display: block; margin-bottom: 2px }
+.callout p { margin: 4px 0 0 34px }
+.callout strong { color: var(--warn) }
+.callout:not([open]) summary::after { content: "Why?"; margin-left: auto; padding-left: 8px; color: var(--warn); font-weight: 600; white-space: nowrap }
 
 .primary {
   width: 100%; margin-top: 4px; font: inherit; font-weight: 600; padding: 13px; border: 0; border-radius: 12px; cursor: pointer;
@@ -115,7 +118,8 @@ textarea:focus { outline: 0; border-color: var(--accent); box-shadow: 0 0 0 3px 
 .primary:disabled { background: #94a3b8; cursor: default }
 
 .status:empty { display: none }
-.status { margin-top: 16px; padding: 14px 16px; border-radius: 12px; border: 1px solid var(--line); background: var(--soft) }
+.status { margin: 0 0 16px; padding: 14px 16px; border-radius: 12px; border: 1px solid var(--line); background: var(--soft) }
+.status { overflow-wrap: anywhere }
 .status p { margin: 0 }
 .status p + p { margin-top: 6px }
 .status .small { font-size: .9rem; color: var(--muted) }
@@ -139,7 +143,7 @@ textarea:focus { outline: 0; border-color: var(--accent); box-shadow: 0 0 0 3px 
   border: 1px solid var(--ok-line); background: var(--card); color: var(--ok);
 }
 .files button:hover, .again:hover { border-color: var(--ok) }
-.again { margin-top: 10px }
+.again { margin-top: 10px; max-width: 100%; text-align: left }
 
 .privacy { display: flex; gap: 12px; align-items: flex-start; margin-top: 20px; padding: 0 4px; color: var(--muted); font-size: .9rem }
 .privacy svg { flex: none; width: 22px; height: 22px; margin-top: 1px; fill: none; stroke: var(--ok); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round }
@@ -151,3 +155,49 @@ textarea:focus { outline: 0; border-color: var(--accent); box-shadow: 0 0 0 3px 
 .credit a:hover { text-decoration: underline }
 
 [hidden] { display: none !important }
+
+/* ---- phones: one screen, like an app ------------------------------------------------------------------ */
+@media (max-width: 600px) {
+  body { padding: 0 0 env(safe-area-inset-bottom); background: var(--card) }
+  html { background: var(--card) }
+  body > * { max-width: none }
+  .brand {
+    margin: 0; padding: calc(10px + env(safe-area-inset-top)) 16px 10px; gap: 10px;
+    background: var(--bg); border-bottom: 1px solid var(--line);
+  }
+  .logo { width: 34px; height: 34px; border-radius: 9px }
+  .brand h1 { font-size: 1.2rem }
+  .brand p { display: none }
+  .gh { width: 36px; height: 36px; border-radius: 10px }
+  .card { border: 0; border-radius: 0; box-shadow: none; padding: 12px 16px 16px }
+  .tabs button { padding: 7px }
+  .lead { display: none }
+  #panel-hide, #panel-reveal { padding-top: 12px }
+  .step { margin-bottom: 12px }
+  .step-title { margin-bottom: 6px; font-size: .95rem }
+  .num { width: 22px; height: 22px; font-size: .78rem }
+  .drop { padding: 9px 12px; gap: 12px; margin-bottom: 0; border-radius: 12px }
+  .drop-icon { width: 36px; height: 36px; padding: 8px; border-radius: 10px }
+  .drop-title { font-size: .95rem }
+  .drop-hint { font-size: .82rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+  .drop-text { flex: 1 }
+  .switch { margin-bottom: 8px }
+  .switch label { padding: 4px 18px }
+  textarea { min-height: 76px; height: 76px }
+  .pass input { padding: 9px 12px }
+  .hint { font-size: .8rem; margin-top: 4px }
+  .field > label { margin-bottom: 4px }
+  #panel-reveal .field { margin: 12px 0 }
+  .callout { margin-bottom: 12px; padding: 10px 12px; font-size: .85rem }
+  .callout svg { width: 18px; height: 18px }
+  .callout p { margin-left: 30px }
+  .status { margin-bottom: 12px; scroll-margin-bottom: 90px }
+  .locked-note { font-size: .82rem }
+  .primary {
+    position: sticky; bottom: calc(10px + env(safe-area-inset-bottom)); z-index: 2; margin: 0;
+    box-shadow: 0 6px 20px rgb(10 79 140 / .28);
+  }
+  .privacy { margin-top: 8px; padding: 0 16px; font-size: .8rem }
+  .privacy svg { width: 18px; height: 18px }
+  .credit { margin: 10px 0 16px; padding: 0 16px; font-size: .78rem }
+}

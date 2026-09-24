@@ -1,0 +1,14 @@
+{
+  "name": "Zolal",
+  "short_name": "Zolal",
+  "description": "Hide files and text inside photos, videos, songs and PDFs. Runs on your device.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#f6f7f9",
+  "icons": [
+    { "src": "icon-180.png", "sizes": "180x180", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
+  ]
+}
