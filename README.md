@@ -31,6 +31,11 @@ cargo run -p zolal-cli -- clean  out.jpg plain.jpg             --pass 'pw'
 `web/` runs the CLI as WebAssembly (`wasm32-wasip1`) in the page, with an in-memory filesystem. No server, no
 upload. The Pages workflow builds the wasm and publishes `web/`. It is a demo front end, not the audited app.
 
+Everything the page loads is its own: the WASI shim is vendored in `web/vendor/` (`@bjorn3/browser_wasi_shim`
+0.4.1, MIT OR Apache-2.0), and a Content-Security-Policy stops it from loading or sending anything to another
+origin. The shim and wasm load up front, so the page keeps working offline once loaded; `sw.js` caches it so it
+also reopens offline after one visit.
+
 ```bash
 cargo build --release -p zolal-cli --target wasm32-wasip1
 cp target/wasm32-wasip1/release/zolal-cli.wasm web/ && python3 -m http.server -d web

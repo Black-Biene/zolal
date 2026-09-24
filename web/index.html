@@ -1,50 +1,24 @@
 <!doctype html>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<!-- Only this site's own files may load, and the page may only talk to this site (to fetch its own wasm).
+     No third-party scripts, no uploads elsewhere, no form posts. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'wasm-unsafe-eval';
+  style-src 'self'; connect-src 'self'; worker-src 'self'; img-src 'self'; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="no-referrer">
 <title>Zolal core — browser demo</title>
-<style>
- body{font:16px/1.5 system-ui;max-width:42rem;margin:2rem auto;padding:0 1rem}
- label{display:block;margin:.75rem 0 .25rem} button{padding:.5rem 1rem;margin-right:.5rem}
- pre{background:#f4f4f5;padding:.75rem;white-space:pre-wrap;word-break:break-all}
- .warn{background:#fff4e5;border-left:4px solid #e8a33d;padding:.75rem}
-</style>
-<h1>Zolal core — browser demo</h1>
-<p class="warn"><strong>Demo only. Don't put real secrets in it.</strong> Everything runs in your browser
-(WebAssembly, no upload, no server), but this page is a toy front end for the engine, not the audited app.</p>
+<link rel="stylesheet" href="style.css">
+<main>
+<h1>Zolal core <span>browser demo</span></h1>
+<p class="note"><strong>Your files and passphrase never leave your device.</strong> Hiding and revealing run
+entirely in your browser; we don't receive or store anything. Once the page has loaded it keeps working with
+the internet switched off, and after one visit it also opens offline. (The page itself is served by GitHub
+Pages, which, like any web host, sees that the page was requested.)</p>
+<p class="warn"><strong>Demo only.</strong> This is a simple front end for the engine, not the audited app.
+Don't use it for real secrets.</p>
 <label>Carrier (JPEG, MP4 or PDF) <input id="carrier" type="file"></label>
 <label>File to hide <input id="payload" type="file"></label>
 <label>Passphrase <input id="pass" type="password" autocomplete="off"></label>
-<p><button id="hide">Hide</button><button id="reveal">Reveal</button></p>
-<pre id="out">ready</pre>
-<script type="module">
-import { WASI, File, OpenFile, PreopenDirectory, ConsoleStdout }
-  from "https://cdn.jsdelivr.net/npm/@bjorn3/browser_wasi_shim@0.4.1/+esm";
-const out = document.getElementById("out"), log = s => out.textContent += "\n" + s;
-const bytes = f => f.arrayBuffer().then(b => new Uint8Array(b));
-const wasm = fetch("zolal-cli.wasm").then(r => WebAssembly.compileStreaming(r));
-
-async function run(args, files) {
-  const dir = new PreopenDirectory(".", new Map(
-    Object.entries(files).map(([n, d]) => [n, new File(d)])));
-  const wasi = new WASI(["zolal-cli", ...args], [`ZOLAL_PASS=${pass.value}`], [
-    new OpenFile(new File([])),
-    ConsoleStdout.lineBuffered(log), ConsoleStdout.lineBuffered(log), dir]);
-  const inst = await WebAssembly.instantiate(await wasm, { wasi_snapshot_preview1: wasi.wasiImport });
-  try { wasi.start(inst); } catch (e) { log(String(e)); }
-  return dir.dir.contents;
-}
-const save = (name, file) => {
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(new Blob([file.data])); a.download = name; a.click();
-};
-hide.onclick = async () => {
-  out.textContent = "hiding…";
-  const c = await run(["hide", "carrier", "out", "secret"],
-    { carrier: await bytes(carrier.files[0]), secret: await bytes(payload.files[0]) });
-  if (c.get("out")) save("stego-" + carrier.files[0].name, c.get("out"));
-};
-reveal.onclick = async () => {
-  out.textContent = "revealing…";
-  const c = await run(["reveal", "carrier", "."], { carrier: await bytes(carrier.files[0]) });
-  for (const [n, f] of c) if (n !== "carrier") save(n, f);
-};
-</script>
+<p class="actions"><button id="hide">Hide</button><button id="reveal">Reveal</button></p>
+<pre id="out">loading…</pre>
+</main>
+<script type="module" src="app.js"></script>

@@ -1,0 +1,32 @@
+:root {
+  --bg: #fff; --fg: #18181b; --muted: #71717a; --panel: #f4f4f5; --border: #e4e4e7;
+  --accent: #2563eb; --accent-fg: #fff;
+  --note-bg: #eef6ff; --note-edge: #2563eb; --warn-bg: #fff4e5; --warn-edge: #e8a33d;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #09090b; --fg: #fafafa; --muted: #a1a1aa; --panel: #18181b; --border: #27272a;
+    --accent: #3b82f6; --note-bg: #0c1a2e; --warn-bg: #2a1d0a;
+  }
+}
+* { box-sizing: border-box }
+body { font: 16px/1.5 system-ui, sans-serif; margin: 0; background: var(--bg); color: var(--fg) }
+main { max-width: 42rem; margin: 2rem auto; padding: 0 1rem }
+h1 { font-size: 1.6rem; margin: 0 0 1rem }
+h1 span { color: var(--muted); font-weight: 400 }
+.note, .warn { padding: .75rem; border-left: 4px solid; border-radius: 4px }
+.note { background: var(--note-bg); border-color: var(--note-edge) }
+.warn { background: var(--warn-bg); border-color: var(--warn-edge) }
+label { display: block; margin: 1rem 0 .25rem; font-weight: 500 }
+input { display: block; width: 100%; margin-top: .25rem; font: inherit; color: inherit }
+input[type=password] { padding: .5rem; border: 1px solid var(--border); border-radius: 6px; background: var(--panel) }
+.actions { margin: 1.25rem 0 }
+button {
+  font: inherit; padding: .5rem 1.25rem; margin-right: .5rem; border: 0; border-radius: 6px;
+  background: var(--accent); color: var(--accent-fg); cursor: pointer
+}
+button:disabled { opacity: .5; cursor: default }
+pre {
+  background: var(--panel); border: 1px solid var(--border); border-radius: 6px; padding: .75rem;
+  white-space: pre-wrap; word-break: break-all
+}
