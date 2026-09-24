@@ -14,7 +14,7 @@ carries no version or length in the clear, and the AEAD tag is the only validato
 |---|---|
 | `zolal-core` | The engine: crypto envelope, payload bundling, container carriers |
 | `zolal-ffi` | C ABI (hand-written `include/zolal.h`) as a static library for Swift |
-| `zolal-cli` | Developer CLI. Also what the browser demo runs |
+| `zolal-cli` | Developer CLI. Also what the web version runs |
 
 ```bash
 cargo test --workspace
@@ -26,10 +26,10 @@ cargo run -p zolal-cli -- reveal out.jpg recovered/            --pass 'pw'
 cargo run -p zolal-cli -- clean  out.jpg plain.jpg             --pass 'pw'
 ```
 
-## Browser demo
+## Web version
 
 `web/` runs the CLI as WebAssembly (`wasm32-wasip1`) in the page, with an in-memory filesystem. No server, no
-upload. The Pages workflow builds the wasm and publishes `web/`. It is a demo front end, not the audited app.
+upload. The Pages workflow builds the wasm and publishes `web/`. It is a separate front end from the audited app.
 
 Everything the page loads is its own: the WASI shim is vendored in `web/vendor/` (`@bjorn3/browser_wasi_shim`
 0.4.1, MIT OR Apache-2.0), and a Content-Security-Policy stops it from loading or sending anything to another

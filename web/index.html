@@ -1,24 +1,95 @@
 <!doctype html>
+<html lang="en">
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <!-- Only this site's own files may load, and the page may only talk to this site (to fetch its own wasm).
      No third-party scripts, no uploads elsewhere, no form posts. -->
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'wasm-unsafe-eval';
   style-src 'self'; connect-src 'self'; worker-src 'self'; img-src 'self'; base-uri 'none'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
-<title>Zolal core — browser demo</title>
+<meta name="color-scheme" content="light">
+<meta name="theme-color" content="#f6f7f9">
+<title>Zolal — hide files inside photos, videos and PDFs</title>
+<link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="style.css">
-<main>
-<h1>Zolal core <span>browser demo</span></h1>
-<p class="note"><strong>Your files and passphrase never leave your device.</strong> Hiding and revealing run
-entirely in your browser; we don't receive or store anything. Once the page has loaded it keeps working with
-the internet switched off, and after one visit it also opens offline. (The page itself is served by GitHub
-Pages, which, like any web host, sees that the page was requested.)</p>
-<p class="warn"><strong>Demo only.</strong> This is a simple front end for the engine, not the audited app.
-Don't use it for real secrets.</p>
-<label>Carrier (JPEG, MP4 or PDF) <input id="carrier" type="file"></label>
-<label>File to hide <input id="payload" type="file"></label>
-<label>Passphrase <input id="pass" type="password" autocomplete="off"></label>
-<p class="actions"><button id="hide">Hide</button><button id="reveal">Reveal</button></p>
-<pre id="out">loading…</pre>
+
+<header class="brand">
+  <img src="icon.svg" alt="" width="40" height="40">
+  <div>
+    <h1>Zolal</h1>
+    <p>Hide files inside photos, videos and PDFs.</p>
+  </div>
+</header>
+
+<main class="card">
+  <div class="tabs" role="tablist">
+    <button role="tab" id="tab-hide" aria-controls="panel-hide" aria-selected="true">Hide</button>
+    <button role="tab" id="tab-reveal" aria-controls="panel-reveal" aria-selected="false" tabindex="-1">Reveal</button>
+  </div>
+
+  <section id="panel-hide" role="tabpanel" aria-labelledby="tab-hide">
+    <p class="lead">Pick a cover file and what to hide in it. You get back a file that still opens normally.</p>
+
+    <label class="drop" data-for="hide-carrier">
+      <input id="hide-carrier" type="file" accept=".jpg,.jpeg,.mp4,.m4v,.pdf,image/jpeg,video/mp4,application/pdf">
+      <svg class="drop-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/><circle cx="9" cy="9" r="2"/><path d="m20 15-4-4-9 9"/></svg>
+      <span class="drop-text">
+        <span class="drop-title">Cover file</span>
+        <span class="drop-hint">A photo (JPEG), video (MP4) or PDF. Drop it here or click to choose.</span>
+      </span>
+    </label>
+
+    <label class="drop" data-for="hide-payload">
+      <input id="hide-payload" type="file" multiple>
+      <svg class="drop-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><rect x="9" y="12" width="6" height="5" rx="1"/><path d="M10.5 12v-1.5a1.5 1.5 0 0 1 3 0V12"/></svg>
+      <span class="drop-text">
+        <span class="drop-title">Files to hide</span>
+        <span class="drop-hint">Any files. They're encrypted before they go in.</span>
+      </span>
+    </label>
+
+    <div class="field">
+      <label for="hide-pass">Passphrase</label>
+      <div class="pass">
+        <input id="hide-pass" type="password" autocomplete="new-password" spellcheck="false">
+        <button type="button" class="peek" aria-controls="hide-pass" aria-label="Show passphrase">Show</button>
+      </div>
+      <p class="hint">You'll need it to get the files back. It can't be recovered if you forget it.</p>
+    </div>
+
+    <button id="hide" class="primary">Hide files</button>
+    <div id="hide-status" class="status" role="status" aria-live="polite"></div>
+  </section>
+
+  <section id="panel-reveal" role="tabpanel" aria-labelledby="tab-reveal" hidden>
+    <p class="lead">Open a file that has something hidden in it, using the passphrase it was hidden with.</p>
+
+    <label class="drop" data-for="reveal-carrier">
+      <input id="reveal-carrier" type="file" accept=".jpg,.jpeg,.mp4,.m4v,.pdf,image/jpeg,video/mp4,application/pdf">
+      <svg class="drop-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>
+      <span class="drop-text">
+        <span class="drop-title">File to open</span>
+        <span class="drop-hint">The photo, video or PDF you received. Drop it here or click to choose.</span>
+      </span>
+    </label>
+
+    <div class="field">
+      <label for="reveal-pass">Passphrase</label>
+      <div class="pass">
+        <input id="reveal-pass" type="password" autocomplete="current-password" spellcheck="false">
+        <button type="button" class="peek" aria-controls="reveal-pass" aria-label="Show passphrase">Show</button>
+      </div>
+    </div>
+
+    <button id="reveal" class="primary">Reveal files</button>
+    <div id="reveal-status" class="status" role="status" aria-live="polite"></div>
+  </section>
 </main>
+
+<footer class="privacy">
+  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 6v6c0 4.5 3.4 8.3 8 9 4.6-.7 8-4.5 8-9V6z"/><path d="m9 12 2 2 4-4"/></svg>
+  <p><strong>Everything happens on your device.</strong> Your files and passphrase are never uploaded; we
+  don't receive or store anything. Once this page has loaded it keeps working with the internet off.</p>
+</footer>
+
 <script type="module" src="app.js"></script>
+</html>
