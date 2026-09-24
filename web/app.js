@@ -175,7 +175,7 @@ async function prepareCarrier(file) {
       return { data: movToMp4(await bytes(file)), name: baseName(file) + ".mp4",
         note: "Converted from MOV to MP4; the video itself wasn't re-encoded." };
     case "image": {
-      const { data, resized } = await toJpeg(file, ext);
+      const { data, resized } = await toJpeg(file, ext, kind);
       return { data, name: baseName(file) + ".jpg",
         note: `Converted from ${ext} to JPEG${resized ? " and resized to fit" : ""}.` };
     }
@@ -197,14 +197,57 @@ function movToMp4(data) {
   return out;
 }
 
-// Redraw a photo as JPEG. Browsers open PNG, WebP, GIF and AVIF; HEIC only in Safari. Very large photos are
-// scaled to 16 megapixels, the most a canvas can hold on iPhones.
-async function toJpeg(file, ext) {
+// libheif (vendor/libheif, LGPL-3.0, loaded unmodified as its own file) decodes HEIC where the browser can't:
+// Safari opens HEIC itself, Chrome and Firefox don't. Loaded only when a HEIC actually needs it.
+let libheif = null;
+function loadLibheif() {
+  libheif ??= (async () => {
+    // This build instantiates synchronously, so it needs the wasm handed to it rather than fetching it.
+    const [wasmBinary] = await Promise.all([
+      fetch("vendor/libheif/libheif.wasm?v=dev").then(r => r.ok ? r.arrayBuffer() : Promise.reject(r.status)),
+      new Promise((resolve, reject) => {
+        const script = document.createElement("script");
+        script.src = "vendor/libheif/libheif.js?v=dev";
+        script.onload = resolve;
+        script.onerror = reject;
+        document.head.append(script);
+      }),
+    ]);
+    let ready;
+    const initialized = new Promise((resolve, reject) => { ready = resolve; setTimeout(reject, 30_000); });
+    const lib = self.libheif({ wasmBinary, onRuntimeInitialized: () => ready() });
+    await initialized;
+    return lib;
+  })().catch(e => { libheif = null; throw e; });
+  return libheif;
+}
+
+async function decodeHeic(file) {
+  const lib = await loadLibheif();
+  const images = new lib.HeifDecoder().decode(await bytes(file));
+  const image = images.find(i => i.is_primary()) ?? images[0];
+  if (!image) throw new Error("not a readable HEIC");
+  const width = image.get_width(), height = image.get_height();
+  const pixels = await new Promise((resolve, reject) => image.display(
+    { data: new Uint8ClampedArray(width * height * 4), width, height },
+    d => d ? resolve(d) : reject(new Error("HEIC decode failed"))));
+  return createImageBitmap(new ImageData(pixels.data, width, height));
+}
+
+// Redraw a photo as JPEG. The browser opens PNG, WebP, GIF and AVIF itself, and HEIC falls back to libheif.
+// Very large photos are scaled to 16 megapixels, the most a canvas can hold on iPhones.
+async function toJpeg(file, ext, kind) {
   let img;
   try { img = await createImageBitmap(file); } catch {
-    throw new Error(/HEI[CF]/.test(ext)
-      ? "This browser can't open HEIC photos. Use Safari on an iPhone or Mac, or convert the photo to JPEG first."
-      : `This browser can't open this ${ext} image. Convert it to JPEG first.`);
+    const heic = kind === "image" || /HEI[CF]/.test(ext);
+    try {
+      if (!heic) throw new Error("unsupported");
+      img = await decodeHeic(file);
+    } catch {
+      throw new Error(heic
+        ? "Couldn't read this HEIC photo. It may be damaged; try exporting it as JPEG."
+        : `This browser can't open this ${ext} image. Convert it to JPEG first.`);
+    }
   }
   const MAX_PIXELS = 16_000_000;
   const scale = Math.min(1, Math.sqrt(MAX_PIXELS / (img.width * img.height)));

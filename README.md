@@ -22,7 +22,8 @@ the picture, video or document itself is untouched.
 - **Markerless:** nothing in the file says "Zolal" or gives a version or length. Only the passphrase can
   confirm something is there.
 - **Other formats:** the web page converts HEIC, PNG and other photos to JPEG, and relabels MOV as MP4
-  (the video isn't re-encoded). HEIC conversion needs Safari; other browsers can't open HEIC.
+  (the video isn't re-encoded). HEIC is decoded by the browser where it can (Safari) and by a bundled
+  WebAssembly build of libheif elsewhere.
 - **Streaming:** memory use doesn't grow with file size. The biggest allocation is Argon2id's 48 MiB.
 
 **Send carriers as files.** WhatsApp, Telegram and most chat apps compress photos and videos when they're

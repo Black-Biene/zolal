@@ -4,6 +4,7 @@ const CACHE = "zolal-?v=dev";
 const SHIM = "vendor/browser_wasi_shim/";
 const FILES = [
   "./", "index.html", "style.css?v=dev", "app.js?v=dev", "icon-32.png?v=dev", "icon-64.png?v=dev", "icon-180.png?v=dev", "zolal-cli.wasm?v=dev",
+  "vendor/libheif/libheif.js?v=dev", "vendor/libheif/libheif.wasm?v=dev",
   ...["index", "wasi", "wasi_defs", "fd", "fs_mem", "fs_opfs", "strace", "debug"].map(f => SHIM + f + ".js"),
 ];
 

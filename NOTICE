@@ -14,3 +14,8 @@ NOTICE file (or its text) with your copy, and to state which files you changed. 
 web/vendor/browser_wasi_shim contains @bjorn3/browser_wasi_shim 0.4.1,
 by bjorn3 and contributors, used under the MIT License
 (see web/vendor/browser_wasi_shim/LICENSE-MIT).
+
+web/vendor/libheif contains the WebAssembly build of libheif (with libde265) from libheif-js 1.23.2,
+by Dirk Farin, struktur AG and contributors, packaged by Kiril Vatev. It is used unmodified under the
+GNU Lesser General Public License v3 and loaded as a separate file, so it can be replaced with any
+compatible build (see web/vendor/libheif/README.md for its source).
