@@ -8,7 +8,7 @@
 <meta name="referrer" content="no-referrer">
 <meta name="color-scheme" content="light">
 <meta name="theme-color" content="#f6f7f9">
-<title>Zolal — hide files inside photos, videos and PDFs</title>
+<title>Zolal — hide files inside photos, videos, songs and PDFs</title>
 <link rel="icon" href="icon-32.png?v=dev" sizes="32x32" type="image/png">
 <link rel="icon" href="icon-64.png?v=dev" sizes="64x64" type="image/png">
 <link rel="apple-touch-icon" href="icon-180.png?v=dev">
@@ -18,7 +18,7 @@
   <img class="logo" src="icon-180.png?v=dev" alt="" width="44" height="44">
   <div>
     <h1>Zolal</h1>
-    <p>Hide files inside photos, videos and PDFs.</p>
+    <p>Hide files inside photos, videos, songs and PDFs.</p>
   </div>
   <a class="gh" href="https://github.com/Black-Biene/zolal" rel="noopener" aria-label="Source code on GitHub" title="Source code on GitHub">
     <svg viewBox="0 0 16 16" width="22" height="22" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg>
@@ -32,43 +32,61 @@
   </div>
 
   <section id="panel-hide" role="tabpanel" aria-labelledby="tab-hide">
-    <p class="lead">Pick a cover file and what to hide in it. You get back a file that still opens normally.</p>
+    <p class="lead">Hide files or a message inside an ordinary photo, video, song or PDF. You get back a file that
+    still opens normally.</p>
 
-    <label class="drop" data-for="hide-carrier">
-      <input id="hide-carrier" type="file" accept=".jpg,.jpeg,.mp4,.m4v,.pdf,image/jpeg,video/mp4,application/pdf">
-      <svg class="drop-icon" viewBox="0 0 24 24" width="44" height="44" fill="none" stroke="currentColor" aria-hidden="true"><path d="M4 5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/><circle cx="9" cy="9" r="2"/><path d="m20 15-4-4-9 9"/></svg>
-      <span class="drop-text">
-        <span class="drop-title">Cover file</span>
-        <span class="drop-hint">A photo (JPEG), video (MP4) or PDF. Drop it here or click to choose.</span>
-      </span>
-    </label>
+    <ol class="steps">
+      <li class="step">
+        <h2 class="step-title"><span class="num" aria-hidden="true">1</span> Choose a cover file</h2>
+        <label class="drop" data-for="hide-carrier">
+          <input id="hide-carrier" type="file" accept="image/*,video/mp4,video/quicktime,audio/mpeg,audio/mp4,application/pdf,.jpg,.jpeg,.heic,.heif,.png,.webp,.mp4,.m4v,.mov,.m4a,.mp3,.pdf">
+          <svg class="drop-icon" viewBox="0 0 24 24" width="44" height="44" fill="none" stroke="currentColor" aria-hidden="true"><path d="M4 5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/><circle cx="9" cy="9" r="2"/><path d="m20 15-4-4-9 9"/></svg>
+          <span class="drop-text">
+            <span class="drop-title">Cover file</span>
+            <span class="drop-hint">A photo, video, song (MP3) or PDF. HEIC, PNG and MOV are converted for you.</span>
+          </span>
+        </label>
+      </li>
 
-    <label class="drop" data-for="hide-payload">
-      <input id="hide-payload" type="file" multiple>
-      <svg class="drop-icon" viewBox="0 0 24 24" width="44" height="44" fill="none" stroke="currentColor" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><rect x="9" y="12" width="6" height="5" rx="1"/><path d="M10.5 12v-1.5a1.5 1.5 0 0 1 3 0V12"/></svg>
-      <span class="drop-text">
-        <span class="drop-title">Files to hide</span>
-        <span class="drop-hint">Any files. They're encrypted before they go in.</span>
-      </span>
-    </label>
+      <li class="step">
+        <h2 class="step-title"><span class="num" aria-hidden="true">2</span> Add what to hide</h2>
+        <fieldset id="step2" disabled>
+          <legend class="locked-note">Choose a cover file first.</legend>
+          <label class="drop" data-for="hide-payload">
+            <input id="hide-payload" type="file" multiple>
+            <svg class="drop-icon" viewBox="0 0 24 24" width="44" height="44" fill="none" stroke="currentColor" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><rect x="9" y="12" width="6" height="5" rx="1"/><path d="M10.5 12v-1.5a1.5 1.5 0 0 1 3 0V12"/></svg>
+            <span class="drop-text">
+              <span class="drop-title">Photos and files</span>
+              <span class="drop-hint">Photos, videos, documents, anything. They're encrypted before they go in.</span>
+            </span>
+          </label>
+          <label class="message-label" for="hide-message">Message <span class="opt">(optional)</span></label>
+          <textarea id="hide-message" rows="4" spellcheck="false" placeholder="Write a note to hide along with the files, or on its own."></textarea>
+        </fieldset>
+      </li>
 
-    <div class="field">
-      <label for="hide-pass">Passphrase</label>
-      <div class="pass">
-        <input id="hide-pass" type="password" autocomplete="new-password" spellcheck="false">
-        <button type="button" class="peek" aria-controls="hide-pass" aria-label="Show passphrase">Show</button>
-      </div>
-      <p class="hint">You'll need it to get the files back. It can't be recovered if you forget it.</p>
-    </div>
+      <li class="step">
+        <h2 class="step-title"><span class="num" aria-hidden="true">3</span> Set a passphrase</h2>
+        <div class="field">
+          <label for="hide-pass" class="sr-only">Passphrase</label>
+          <div class="pass">
+            <input id="hide-pass" type="password" autocomplete="new-password" spellcheck="false">
+            <button type="button" class="peek" aria-controls="hide-pass" aria-label="Show passphrase">Show</button>
+          </div>
+          <p class="hint">You'll need it to get everything back. It can't be recovered if you forget it.</p>
+        </div>
+      </li>
+    </ol>
 
     <div class="callout" role="note">
       <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" aria-hidden="true"><path d="M12 9v4m0 4h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>
       <p><strong>Send the result as a file, not as a photo or video.</strong> WhatsApp, Telegram, Instagram and
-      most chat apps shrink photos and videos when you send them, and that deletes what's hidden. Send it as a
+      most chat apps shrink photos and videos when you send them, and that deletes what's hidden. Songs and PDFs
+      are safest sent as files too. Send it as a
       <em>document/file</em> (WhatsApp: attach → Document; Telegram: attach → File), by email, or inside a .zip.</p>
     </div>
 
-    <button id="hide" class="primary">Hide files</button>
+    <button id="hide" class="primary">Hide and download</button>
     <div id="hide-status" class="status" role="status" aria-live="polite"></div>
   </section>
 
@@ -76,11 +94,11 @@
     <p class="lead">Open a file that has something hidden in it, using the passphrase it was hidden with.</p>
 
     <label class="drop" data-for="reveal-carrier">
-      <input id="reveal-carrier" type="file" accept=".jpg,.jpeg,.mp4,.m4v,.pdf,image/jpeg,video/mp4,application/pdf">
+      <input id="reveal-carrier" type="file" accept="image/jpeg,video/mp4,audio/mpeg,audio/mp4,application/pdf,.jpg,.jpeg,.mp4,.m4v,.m4a,.mp3,.pdf">
       <svg class="drop-icon" viewBox="0 0 24 24" width="44" height="44" fill="none" stroke="currentColor" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>
       <span class="drop-text">
         <span class="drop-title">File to open</span>
-        <span class="drop-hint">The photo, video or PDF you received, saved as a file. Drop it here or click to choose.</span>
+        <span class="drop-hint">The photo, video, song or PDF you received, saved as a file. Drop it here or click to choose.</span>
       </span>
     </label>
 

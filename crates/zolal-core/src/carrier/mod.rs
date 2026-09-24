@@ -3,6 +3,7 @@
 //! Adding a format later means adding one file here and nothing elsewhere.
 
 pub mod jpeg;
+pub mod mp3;
 pub mod mp4;
 pub mod pdf;
 
@@ -16,8 +17,8 @@ impl<T: Read + Seek> ReadSeek for T {}
 
 /// Container formats we accept as carriers.
 ///
-/// HEIC and MOV are deliberately absent: they are normalised to JPEG and MP4 respectively
-/// on the Swift side before this crate ever sees them.
+/// HEIC and MOV are deliberately absent: the front end converts them to JPEG and MP4 before
+/// this crate ever sees them.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CarrierFormat {
     /// JPEG image.
@@ -26,6 +27,8 @@ pub enum CarrierFormat {
     Mp4,
     /// PDF document.
     Pdf,
+    /// MP3 audio.
+    Mp3,
 }
 
 impl CarrierFormat {
@@ -35,6 +38,7 @@ impl CarrierFormat {
             CarrierFormat::Jpeg => "JPEG",
             CarrierFormat::Mp4 => "MP4",
             CarrierFormat::Pdf => "PDF",
+            CarrierFormat::Mp3 => "MP3",
         }
     }
 }
@@ -54,6 +58,8 @@ pub enum Technique {
     Mp4FreeBox,
     /// Append an unreferenced stream object via a PDF incremental update. Default for PDF.
     PdfObject,
+    /// Add a `PRIV` frame to the leading ID3v2 tag. Default for MP3.
+    Mp3Id3,
 }
 
 impl Technique {
@@ -63,6 +69,7 @@ impl Technique {
             (Technique::Auto, CarrierFormat::Jpeg) => Technique::JpegTrailer,
             (Technique::Auto, CarrierFormat::Mp4) => Technique::Mp4FreeBox,
             (Technique::Auto, CarrierFormat::Pdf) => Technique::PdfObject,
+            (Technique::Auto, CarrierFormat::Mp3) => Technique::Mp3Id3,
             (explicit, _) => explicit,
         }
     }
@@ -74,6 +81,7 @@ impl Technique {
             Technique::JpegTrailer | Technique::JpegApp15 => Some(CarrierFormat::Jpeg),
             Technique::Mp4FreeBox => Some(CarrierFormat::Mp4),
             Technique::PdfObject => Some(CarrierFormat::Pdf),
+            Technique::Mp3Id3 => Some(CarrierFormat::Mp3),
         }
     }
 }

@@ -48,6 +48,7 @@ use std::path::{Path, PathBuf};
 use secrecy::SecretString;
 
 use crate::carrier::jpeg::JpegCarrier;
+use crate::carrier::mp3::Mp3Carrier;
 use crate::carrier::mp4::Mp4Carrier;
 use crate::carrier::pdf::PdfCarrier;
 use crate::carrier::Carrier;
@@ -132,14 +133,14 @@ pub const JPEG_MAX_OUTPUT: u64 = 50 * 1024 * 1024;
 pub fn size_limit(format: CarrierFormat) -> Option<u64> {
     match format {
         CarrierFormat::Jpeg => Some(JPEG_MAX_OUTPUT),
-        CarrierFormat::Mp4 | CarrierFormat::Pdf => None,
+        CarrierFormat::Mp4 | CarrierFormat::Pdf | CarrierFormat::Mp3 => None,
     }
 }
 
 /// The carrier format to suggest when `format` hits its [`size_limit`].
 fn bigger_carrier(format: CarrierFormat) -> CarrierFormat {
     match format {
-        CarrierFormat::Jpeg | CarrierFormat::Pdf => CarrierFormat::Mp4,
+        CarrierFormat::Jpeg | CarrierFormat::Pdf | CarrierFormat::Mp3 => CarrierFormat::Mp4,
         CarrierFormat::Mp4 => CarrierFormat::Mp4,
     }
 }
@@ -149,7 +150,7 @@ impl Plausibility {
         let ratio = result_size as f32 / carrier_size.max(1) as f32;
         let (natural_max, suspicious_above) = match format {
             CarrierFormat::Jpeg => (JPEG_NATURAL_MAX, JPEG_SUSPICIOUS_ABOVE),
-            CarrierFormat::Mp4 | CarrierFormat::Pdf => (u64::MAX, u64::MAX),
+            CarrierFormat::Mp4 | CarrierFormat::Pdf | CarrierFormat::Mp3 => (u64::MAX, u64::MAX),
         };
         let verdict = if size_limit(format).is_some_and(|limit| result_size > limit) {
             Verdict::TooLarge
@@ -170,7 +171,7 @@ impl Plausibility {
 
 /// Request to hide payload files inside a carrier.
 pub struct HideRequest {
-    /// Carrier file. Must already be JPEG, MP4 or PDF (normalisation happens Swift-side).
+    /// Carrier file. Must already be JPEG, MP4, PDF or MP3 (the front end converts other formats).
     pub carrier: PathBuf,
     /// One or more files to hide.
     pub payloads: Vec<PathBuf>,
@@ -511,6 +512,7 @@ fn carrier_for(format: CarrierFormat) -> Result<&'static dyn Carrier> {
         CarrierFormat::Jpeg => Ok(&JpegCarrier),
         CarrierFormat::Mp4 => Ok(&Mp4Carrier),
         CarrierFormat::Pdf => Ok(&PdfCarrier),
+        CarrierFormat::Mp3 => Ok(&Mp3Carrier),
     }
 }
 

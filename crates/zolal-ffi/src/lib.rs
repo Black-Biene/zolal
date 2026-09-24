@@ -89,6 +89,8 @@ pub const ZOLAL_FORMAT_JPEG: u8 = 0;
 pub const ZOLAL_FORMAT_MP4: u8 = 1;
 /// PDF carrier. Matches [`CarrierFormat::Pdf`].
 pub const ZOLAL_FORMAT_PDF: u8 = 2;
+/// MP3 carrier. Matches [`CarrierFormat::Mp3`].
+pub const ZOLAL_FORMAT_MP3: u8 = 3;
 
 /// Let the engine pick the default technique for the detected format.
 pub const ZOLAL_TECHNIQUE_AUTO: u8 = 0;
@@ -100,6 +102,8 @@ pub const ZOLAL_TECHNIQUE_JPEG_APP15: u8 = 2;
 pub const ZOLAL_TECHNIQUE_MP4_FREE_BOX: u8 = 3;
 /// Append an unreferenced PDF stream object (the PDF default).
 pub const ZOLAL_TECHNIQUE_PDF_OBJECT: u8 = 4;
+/// Add a `PRIV` frame to the MP3's ID3v2 tag (the MP3 default).
+pub const ZOLAL_TECHNIQUE_MP3_ID3: u8 = 5;
 
 /// Growth is unremarkable for this kind of file.
 pub const ZOLAL_VERDICT_NATURAL: u8 = 0;
@@ -710,6 +714,7 @@ fn format_code(format: CarrierFormat) -> u8 {
         CarrierFormat::Jpeg => ZOLAL_FORMAT_JPEG,
         CarrierFormat::Mp4 => ZOLAL_FORMAT_MP4,
         CarrierFormat::Pdf => ZOLAL_FORMAT_PDF,
+        CarrierFormat::Mp3 => ZOLAL_FORMAT_MP3,
     }
 }
 
@@ -720,6 +725,7 @@ fn technique_code(technique: Technique) -> u8 {
         Technique::JpegApp15 => ZOLAL_TECHNIQUE_JPEG_APP15,
         Technique::Mp4FreeBox => ZOLAL_TECHNIQUE_MP4_FREE_BOX,
         Technique::PdfObject => ZOLAL_TECHNIQUE_PDF_OBJECT,
+        Technique::Mp3Id3 => ZOLAL_TECHNIQUE_MP3_ID3,
     }
 }
 
@@ -730,6 +736,7 @@ fn technique_from(code: u8) -> std::result::Result<Technique, Failure> {
         ZOLAL_TECHNIQUE_JPEG_APP15 => Technique::JpegApp15,
         ZOLAL_TECHNIQUE_MP4_FREE_BOX => Technique::Mp4FreeBox,
         ZOLAL_TECHNIQUE_PDF_OBJECT => Technique::PdfObject,
+        ZOLAL_TECHNIQUE_MP3_ID3 => Technique::Mp3Id3,
         other => {
             return Err(Failure::Core(ZolalError::InvalidRequest(format!(
                 "unknown technique code {other}"

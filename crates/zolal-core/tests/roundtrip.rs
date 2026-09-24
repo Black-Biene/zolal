@@ -1,7 +1,7 @@
 //! Round-trip tests: hide -> reveal -> assert the payload is byte-identical.
 //!
-//! These are the tests that prove the design: the crypto envelope and all three carriers
-//! (JPEG, MP4, PDF), end to end, through the public API only.
+//! These are the tests that prove the design: the crypto envelope and all four carriers
+//! (JPEG, MP4, PDF, MP3), end to end, through the public API only.
 //!
 //! **Fixtures must stay synthetic** — `core/` is the directory that would be published if the
 //! project is ever open-sourced, so no real personal media belongs here. Every carrier below is
@@ -1335,4 +1335,175 @@ fn a_heavy_stego_photo_can_still_be_reused() {
         .unwrap();
     assert!(report.output_size < 1024 * 1024);
     env.reveal(&env.path("reused.jpg"), "out", PASS).unwrap();
+}
+
+// ---------------------------------------------------------------------------------------------
+// MP3
+
+/// Which leading ID3v2 tag a synthetic MP3 should have.
+#[derive(Clone, Copy, Debug)]
+enum Id3 {
+    /// No tag: the file starts with an audio frame.
+    None,
+    /// ID3v2.3 with a title frame and 64 bytes of padding.
+    V3Padded,
+    /// ID3v2.4 (synchsafe frame sizes) with a title frame and no padding.
+    V4,
+}
+
+/// Silent MPEG-1 Layer III audio: 40 frames at 128 kbit/s, 44.1 kHz. All-zero side info and
+/// main data decode as silence, so this is a real, playable (if quiet) MP3.
+fn mp3_audio() -> Vec<u8> {
+    let mut frame = vec![0u8; 417]; // 144 * 128000 / 44100, no padding bit
+    frame[..4].copy_from_slice(&[0xFF, 0xFB, 0x90, 0x00]);
+    frame.repeat(40)
+}
+
+/// The title frame every tagged fixture carries, so tests can check it survives.
+fn mp3_title_frame(major: u8) -> Vec<u8> {
+    let body = b"\x00Test song";
+    let mut f = b"TIT2".to_vec();
+    let n = body.len() as u32;
+    f.extend_from_slice(&if major == 4 {
+        [0, 0, 0, n as u8] // synchsafe; small enough for one byte
+    } else {
+        n.to_be_bytes()
+    });
+    f.extend_from_slice(&[0, 0]);
+    f.extend_from_slice(body);
+    f
+}
+
+fn synth_mp3(tag: Id3) -> Vec<u8> {
+    let (major, padding) = match tag {
+        Id3::None => return mp3_audio(),
+        Id3::V3Padded => (3, 64),
+        Id3::V4 => (4, 0),
+    };
+    let mut body = mp3_title_frame(major);
+    body.resize(body.len() + padding, 0);
+    let n = body.len();
+    let mut out = vec![b'I', b'D', b'3', major, 0, 0];
+    out.extend_from_slice(&[0, 0, (n >> 7) as u8 & 0x7F, n as u8 & 0x7F]);
+    out.extend_from_slice(&body);
+    out.extend_from_slice(&mp3_audio());
+    out
+}
+
+/// Independent check that `bytes` is still the song: a well-formed ID3v2 header whose size
+/// lands exactly on the untouched audio, and the title frame still in the tag.
+fn assert_mp3_intact(bytes: &[u8], tag: Id3) {
+    let audio = mp3_audio();
+    assert!(bytes.ends_with(&audio), "audio frames changed");
+    let tag_len = bytes.len() - audio.len();
+    if tag_len == 0 {
+        return;
+    }
+    assert_eq!(&bytes[..3], b"ID3");
+    let size = bytes[6..10]
+        .iter()
+        .fold(0usize, |acc, &b| (acc << 7) | usize::from(b));
+    assert_eq!(10 + size, tag_len, "tag size doesn't reach the audio");
+    let major = bytes[3];
+    if !matches!(tag, Id3::None) {
+        let title = mp3_title_frame(major);
+        assert_eq!(&bytes[10..10 + title.len()], &title[..], "title frame lost");
+    }
+}
+
+#[test]
+fn mp3_id3_roundtrip() {
+    for tag in [Id3::None, Id3::V3Padded, Id3::V4] {
+        let env = Env::new();
+        let carrier_bytes = synth_mp3(tag);
+        let carrier = env.write("song.mp3", &carrier_bytes);
+        assert_eq!(probe(&carrier).unwrap().format, CarrierFormat::Mp3);
+        let k = bundle_overhead();
+
+        for (i, &size) in SIZES.iter().enumerate() {
+            let data = payload_bytes(size, i as u64);
+            let payload = env.write(&format!("in{i}/payload.bin"), &data);
+            let stego = format!("stego{i}.mp3");
+
+            let report = env
+                .hide(&carrier, &[payload], &stego, Technique::Auto)
+                .unwrap_or_else(|e| panic!("{tag:?} hide {size}: {e}"));
+            assert_eq!(report.technique, Technique::Mp3Id3);
+
+            // Tag header + the song's frames (padding dropped) + PRIV header + owner + envelope.
+            let frames = match tag {
+                Id3::None => 0,
+                Id3::V3Padded => mp3_title_frame(3).len(),
+                Id3::V4 => mp3_title_frame(4).len(),
+            } as u64;
+            let expected = 10 + frames + 10 + 1 + region_len(k + size) + mp3_audio().len() as u64;
+            assert_eq!(report.output_size, expected, "{tag:?} size {size}");
+
+            let stego_bytes = fs::read(env.path(&stego)).unwrap();
+            assert_mp3_intact(&stego_bytes, tag);
+
+            let out = format!("out{i}");
+            let revealed = env
+                .reveal(&env.path(&stego), &out, PASS)
+                .unwrap_or_else(|e| panic!("{tag:?} reveal {size}: {e}"));
+            assert_eq!(revealed.technique, Technique::Mp3Id3);
+            assert!(
+                fs::read(&revealed.files[0]).unwrap() == data,
+                "{tag:?} size {size}: payload differs"
+            );
+        }
+
+        // Hiding again replaces the payload instead of stacking a second one.
+        let once = fs::metadata(env.path("stego1.mp3")).unwrap().len();
+        let again = env
+            .hide(
+                &env.path("stego1.mp3"),
+                &[env.path("in1/payload.bin")],
+                "twice.mp3",
+                Technique::Auto,
+            )
+            .unwrap();
+        assert_eq!(again.output_size, once, "{tag:?}: re-hiding grew the file");
+
+        assert!(matches!(
+            env.reveal(&env.path("stego1.mp3"), "bad", "nope"),
+            Err(ZolalError::WrongPassphrase)
+        ));
+        assert!(matches!(
+            env.reveal(&carrier, "clean", PASS),
+            Err(ZolalError::NoHiddenData { .. })
+        ));
+    }
+}
+
+#[test]
+fn cleaning_restores_an_mp3() {
+    for tag in [Id3::None, Id3::V4] {
+        clean_restores("song.mp3", &synth_mp3(tag), Technique::Mp3Id3, move |b| {
+            assert_mp3_intact(b, tag);
+        });
+    }
+}
+
+#[test]
+fn mp3_tags_we_cant_rewrite_are_refused_not_damaged() {
+    let env = Env::new();
+    let payload = env.write("p.txt", b"x");
+    let mut v22 = vec![b'I', b'D', b'3', 2, 0, 0, 0, 0, 0, 0];
+    v22.extend_from_slice(&mp3_audio());
+    let mut unsync = synth_mp3(Id3::V4);
+    unsync[5] = 0x80;
+    for (name, bytes) in [("v22.mp3", v22), ("unsync.mp3", unsync)] {
+        let carrier = env.write(name, &bytes);
+        match env.hide(
+            &carrier,
+            std::slice::from_ref(&payload),
+            "o.mp3",
+            Technique::Auto,
+        ) {
+            Err(ZolalError::MalformedContainer { format: "MP3", .. }) => {}
+            other => panic!("{name}: {other:?}"),
+        }
+        assert!(!env.path("o.mp3").exists(), "{name}: wrote output anyway");
+    }
 }

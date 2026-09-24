@@ -55,12 +55,14 @@ extern "C" {
 #define ZOLAL_FORMAT_JPEG               0
 #define ZOLAL_FORMAT_MP4                1
 #define ZOLAL_FORMAT_PDF                2
+#define ZOLAL_FORMAT_MP3                3
 
 #define ZOLAL_TECHNIQUE_AUTO            0  /* pick the default for the detected format */
 #define ZOLAL_TECHNIQUE_JPEG_TRAILER    1
 #define ZOLAL_TECHNIQUE_JPEG_APP15      2
 #define ZOLAL_TECHNIQUE_MP4_FREE_BOX    3
 #define ZOLAL_TECHNIQUE_PDF_OBJECT      4
+#define ZOLAL_TECHNIQUE_MP3_ID3         5
 
 #define ZOLAL_VERDICT_NATURAL           0
 #define ZOLAL_VERDICT_NOTICEABLE        1

@@ -69,7 +69,7 @@ clean   write a copy of the carrier with its hidden files removed
 probe   report the format, and whether a region that could hold data exists
 
 The passphrase can also come from the ZOLAL_PASS environment variable.
-Carriers: JPEG, MP4 and PDF. Convert HEIC->JPEG and MOV->MP4 before use.";
+Carriers: JPEG, MP4, PDF and MP3. Convert HEIC->JPEG and MOV->MP4 before use.";
 
 enum CliError {
     Usage(String),
@@ -271,7 +271,7 @@ fn explain(e: &ZolalError) -> String {
             limit,
             suggestion,
         } => format!(
-            "too big to hide in a photo: the result would be {} (the limit is {}), and a photo \
+            "too big to hide in this file: the result would be {} (the limit is {}), and a file \
              that size may not open at all. Hide it in a video ({}) instead.",
             human(*output_size),
             human(*limit),

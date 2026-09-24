@@ -4,15 +4,15 @@
 //! (Telegram renamed every photo to `photo_<date>.jpg` during testing).
 
 use crate::carrier::mp4::{Mp4Carrier, AVIF_BRANDS, HEIF_BRANDS, QUICKTIME_BRAND};
-use crate::carrier::{jpeg::JpegCarrier, pdf::PdfCarrier, Carrier, CarrierFormat};
+use crate::carrier::{jpeg::JpegCarrier, mp3::Mp3Carrier, pdf::PdfCarrier, Carrier, CarrierFormat};
 
 /// Bytes needed to identify any format we handle.
 pub const PROBE_LEN: usize = 16;
 
 /// Identify a carrier format from the first bytes of a file.
 ///
-/// Returns `None` for anything unsupported, including HEIC and MOV — those are normalised on
-/// the Swift side, so seeing one here means the Swift layer has a bug. [`describe`] names them
+/// Returns `None` for anything unsupported, including HEIC and MOV — the front end converts
+/// those first, so seeing one here means it didn't. [`describe`] names them
 /// explicitly so that error is obvious rather than a generic "unsupported".
 pub fn detect(head: &[u8]) -> Option<CarrierFormat> {
     if JpegCarrier::probe(head) {
@@ -21,6 +21,8 @@ pub fn detect(head: &[u8]) -> Option<CarrierFormat> {
         Some(CarrierFormat::Mp4)
     } else if PdfCarrier::probe(head) {
         Some(CarrierFormat::Pdf)
+    } else if Mp3Carrier::probe(head) {
+        Some(CarrierFormat::Mp3)
     } else {
         None
     }

@@ -64,7 +64,28 @@ body > * { max-width: 560px; margin-left: auto; margin-right: auto }
 .drop.filled .drop-icon { background: var(--accent); stroke: #fff }
 .drop.filled .drop-hint { color: var(--ink) }
 
-.field { margin: 18px 0 20px }
+.steps { list-style: none; margin: 0; padding: 0 }
+.step { margin: 0 0 22px }
+.step-title { display: flex; align-items: center; gap: 10px; font-size: 1rem; margin: 0 0 10px }
+.num {
+  flex: none; display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%;
+  background: var(--accent); color: #fff; font-size: .85rem; font-weight: 700;
+}
+fieldset { border: 0; margin: 0; padding: 0; min-width: 0 }
+fieldset:disabled .drop, fieldset:disabled textarea, fieldset:disabled .message-label { opacity: .45; cursor: not-allowed }
+fieldset:disabled .drop input { cursor: not-allowed }
+.locked-note { display: none }
+fieldset:disabled .locked-note { display: block; float: none; padding: 0; margin: 0 0 8px; color: var(--muted); font-size: .9rem }
+.message-label { display: block; font-weight: 600; margin: 14px 0 6px }
+.opt { color: var(--muted); font-weight: 400 }
+textarea {
+  display: block; width: 100%; resize: vertical; min-height: 96px; padding: 10px 12px; font: inherit; color: var(--ink);
+  border: 1px solid #cbd5e1; border-radius: 10px; background: var(--card);
+}
+textarea:focus { outline: 0; border-color: var(--accent); box-shadow: 0 0 0 3px rgb(10 79 140 / .18) }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap }
+.message { white-space: pre-wrap; overflow-wrap: anywhere; background: var(--card); border: 1px solid var(--ok-line); border-radius: 10px; padding: 10px 12px; margin: 10px 0 0 }
+.field { margin: 0 }
 .field > label { display: block; font-weight: 600; margin-bottom: 6px }
 .pass { display: flex; border: 1px solid #cbd5e1; border-radius: 10px; overflow: hidden; background: var(--card) }
 .pass:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px rgb(10 79 140 / .18) }
@@ -82,7 +103,7 @@ body > * { max-width: 560px; margin-left: auto; margin-right: auto }
 .callout strong { color: var(--warn); display: block; margin-bottom: 2px }
 
 .primary {
-  width: 100%; font: inherit; font-weight: 600; padding: 13px; border: 0; border-radius: 12px; cursor: pointer;
+  width: 100%; margin-top: 4px; font: inherit; font-weight: 600; padding: 13px; border: 0; border-radius: 12px; cursor: pointer;
   background: var(--accent); color: #fff; transition: background .15s;
 }
 .primary:hover { background: var(--accent-hover) }

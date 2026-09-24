@@ -1,6 +1,7 @@
 # Zolal
 
-Hide encrypted files inside ordinary photos, videos and PDFs. The result still opens normally in any viewer.
+Hide encrypted files and messages inside ordinary photos, videos, songs and PDFs. The result still opens and
+plays normally.
 
 **[Try it in your browser](https://black-biene.github.io/zolal/)**: it runs entirely on your device,
 uploads nothing and works offline once loaded.
@@ -15,10 +16,13 @@ the picture, video or document itself is untouched.
 | JPEG | After the end-of-image marker, or in APP15 segments |
 | MP4 | In a `free` box |
 | PDF | In an unreferenced object |
+| MP3 | In a private frame of the ID3 tag (where the title and cover art live) |
 
 - **Encryption:** Argon2id (48 MiB, t=3) derives the key; XChaCha20-Poly1305 encrypts in 64 KiB STREAM chunks.
 - **Markerless:** nothing in the file says "Zolal" or gives a version or length. Only the passphrase can
   confirm something is there.
+- **Other formats:** the web page converts HEIC, PNG and other photos to JPEG, and relabels MOV as MP4
+  (the video isn't re-encoded). HEIC conversion needs Safari; other browsers can't open HEIC.
 - **Streaming:** memory use doesn't grow with file size. The biggest allocation is Argon2id's 48 MiB.
 
 **Send carriers as files.** WhatsApp, Telegram and most chat apps compress photos and videos when they're
