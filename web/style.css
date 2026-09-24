@@ -1,7 +1,7 @@
 :root {
   color-scheme: light;
   --bg: #f6f7f9; --card: #fff; --ink: #0f172a; --muted: #64748b; --line: #e2e8f0; --soft: #f1f5f9;
-  --accent: #0e7490; --accent-hover: #155e75; --accent-soft: #ecfeff; --accent-line: #a5f3fc;
+  --accent: #0a4f8c; --accent-hover: #083d6e; --accent-soft: #eef5fc; --accent-line: #bcd6ef;
   --ok: #047857; --ok-soft: #ecfdf5; --ok-line: #a7f3d0;
   --err: #b91c1c; --err-soft: #fef2f2; --err-line: #fecaca;
   --warn: #92400e; --warn-soft: #fffbeb; --warn-line: #fde68a;
@@ -20,6 +20,7 @@ body > * { max-width: 560px; margin-left: auto; margin-right: auto }
 .brand h1 { font-size: 1.5rem; line-height: 1.2; margin: 0; letter-spacing: -.01em }
 .brand p { margin: 0; color: var(--muted) }
 .brand > div { flex: 1; min-width: 0 }
+.logo { flex: none; border-radius: 11px; box-shadow: 0 1px 3px rgb(2 26 75 / .25) }
 .gh {
   flex: none; display: grid; place-items: center; width: 42px; height: 42px; border-radius: 12px;
   color: var(--ink); background: var(--card); border: 1px solid var(--line); transition: border-color .15s, color .15s;
@@ -66,7 +67,7 @@ body > * { max-width: 560px; margin-left: auto; margin-right: auto }
 .field { margin: 18px 0 20px }
 .field > label { display: block; font-weight: 600; margin-bottom: 6px }
 .pass { display: flex; border: 1px solid #cbd5e1; border-radius: 10px; overflow: hidden; background: var(--card) }
-.pass:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px rgb(14 116 144 / .15) }
+.pass:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px rgb(10 79 140 / .18) }
 .pass input { flex: 1; min-width: 0; border: 0; padding: 11px 12px; font: inherit; color: var(--ink); background: transparent; outline: 0 }
 .peek { border: 0; border-left: 1px solid var(--line); background: var(--soft); color: var(--muted); font: inherit; font-size: .9rem; padding: 0 14px; cursor: pointer }
 .peek:hover { color: var(--ink) }
