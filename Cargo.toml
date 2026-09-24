@@ -14,6 +14,9 @@ rust-version = "1.88"
 # Apache-2.0 alone, not the usual "MIT OR Apache-2.0": the MIT option would let users skip the
 # attribution in NOTICE.
 license = "Apache-2.0"
+authors = ["Black Biene <hi@blackbiene.dev>"]
+repository = "https://github.com/Black-Biene/zolal-core"
+homepage = "https://blackbiene.dev"
 publish = false
 
 # Shared dependency versions. Every entry must be permissive-licensed

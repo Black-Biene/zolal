@@ -1,5 +1,16 @@
 Zolal core
 Copyright 2026 Black Biene
 https://blackbiene.dev
+https://github.com/Black-Biene/zolal-core
 
-This product includes software developed by Black Biene.
+This product includes software developed by Black Biene (Zolal core).
+
+If you use, modify or redistribute this software, the Apache License 2.0 requires you to keep this
+NOTICE file (or its text) with your copy, and to state which files you changed. In an app, a
+"Licences" or "About" screen that shows this notice is enough.
+
+----------------------------------------------------------------------------------------------------
+
+web/vendor/browser_wasi_shim contains @bjorn3/browser_wasi_shim 0.4.1,
+by bjorn3 and contributors, used under the MIT License
+(see web/vendor/browser_wasi_shim/LICENSE-MIT).

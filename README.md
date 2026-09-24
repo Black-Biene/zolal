@@ -1,56 +1,87 @@
-# zolal-core
+# Zolal core
 
-Hides encrypted files inside JPEG, MP4 and PDF carriers using *container* techniques: the payload lives in
-structurally unused space (after a JPEG's EOI, in an MP4 `free` box, in an unreferenced PDF object), so the
-carrier still opens normally in any viewer.
+Hide encrypted files inside ordinary photos, videos and PDFs. The result still opens normally in any viewer.
 
-**Not forensic-grade steganography.** A file-size check reveals that something was added; the threat model is a
-casual snooper, not an analyst. `plausibility()` exists to keep a UI honest about that.
+**[Try it in your browser](https://black-biene.github.io/zolal-core/)**: it runs entirely on your device,
+uploads nothing and works offline once loaded.
 
-Crypto: Argon2id (48 MiB, t=3) → XChaCha20-Poly1305 in STREAM/BE32 chunks of 64 KiB. Markerless: the envelope
-carries no version or length in the clear, and the AEAD tag is the only validator.
+## How it works
 
-| Crate | Role |
+Zolal uses *container* techniques: the encrypted data goes into space the file format already ignores, so
+the picture, video or document itself is untouched.
+
+| Carrier | Where the data goes |
 |---|---|
-| `zolal-core` | The engine: crypto envelope, payload bundling, container carriers |
-| `zolal-ffi` | C ABI (hand-written `include/zolal.h`) as a static library for Swift |
-| `zolal-cli` | Developer CLI. Also what the web version runs |
+| JPEG | After the end-of-image marker, or in APP15 segments |
+| MP4 | In a `free` box |
+| PDF | In an unreferenced object |
+
+- **Encryption:** Argon2id (48 MiB, t=3) derives the key; XChaCha20-Poly1305 encrypts in 64 KiB STREAM chunks.
+- **Markerless:** nothing in the file says "Zolal" or gives a version or length. Only the passphrase can
+  confirm something is there.
+- **Streaming:** memory use doesn't grow with file size. The biggest allocation is Argon2id's 48 MiB.
+
+**Send carriers as files.** WhatsApp, Telegram and most chat apps compress photos and videos when they're
+sent as media, which deletes the hidden data. Send them as a document/file, by email, or in a .zip.
+
+**What it's not:** forensic-grade steganography. The file gets bigger, so someone comparing sizes can tell
+something was added. It protects against a casual look, not a trained analyst. `plausibility()` reports how
+noticeable the size change is, so apps can be honest about it.
+
+## Project layout
+
+| Crate | What it is |
+|---|---|
+| [`zolal-core`](crates/zolal-core) | The engine: encryption, bundling files, and the JPEG/MP4/PDF carriers |
+| [`zolal-ffi`](crates/zolal-ffi) | C interface (`include/zolal.h`) built as a static library for Swift/iOS |
+| [`zolal-cli`](crates/zolal-cli) | Command-line tool for developers; also what the web page runs |
+| [`web/`](web) | The browser version: the CLI compiled to WebAssembly |
+
+## Getting started
+
+Needs Rust 1.88 or newer.
 
 ```bash
-cargo test --workspace
-cargo clippy --workspace --all-targets -- -D warnings
-cargo deny check
-
+# hide a file in a photo, get it back, or remove it
 cargo run -p zolal-cli -- hide   photo.jpg out.jpg secret.pdf --pass 'pw'
 cargo run -p zolal-cli -- reveal out.jpg recovered/            --pass 'pw'
 cargo run -p zolal-cli -- clean  out.jpg plain.jpg             --pass 'pw'
 ```
 
-## Web version
+Set `ZOLAL_PASS` instead of `--pass` to keep the passphrase out of your shell history.
 
-`web/` runs the CLI as WebAssembly (`wasm32-wasip1`) in the page, with an in-memory filesystem. No server, no
-upload. The Pages workflow builds the wasm and publishes `web/`. It is a separate front end from the audited app.
+For iOS, `./build-xcframework.sh` builds `Zolal.xcframework` (needs Xcode).
 
-Everything the page loads is its own: the WASI shim is vendored in `web/vendor/` (`@bjorn3/browser_wasi_shim`
-0.4.1, MIT OR Apache-2.0), and a Content-Security-Policy stops it from loading or sending anything to another
-origin. The shim and wasm load up front, so the page keeps working offline once loaded; `sw.js` caches it so it
-also reopens offline after one visit.
+### Run the web version locally
 
 ```bash
 cargo build --release -p zolal-cli --target wasm32-wasip1
-cp target/wasm32-wasip1/release/zolal-cli.wasm web/ && python3 -m http.server -d web
+cp target/wasm32-wasip1/release/zolal-cli.wasm web/
+python3 -m http.server -d web
 ```
 
-## Design
+Every push to `main` publishes `web/` to GitHub Pages. The page only loads its own files: a
+Content-Security-Policy blocks every other site, and a service worker lets it open offline.
 
-Rationale lives in the module docs (`cargo doc --open`): start with `src/lib.rs`, then `src/crypto/mod.rs` and
-`src/carrier/jpeg.rs`. Three things worth knowing first:
+## Building an app on it
 
-- **Streaming, always.** The API takes paths, not byte arrays; memory does not grow with file size. The largest
-  allocation is Argon2id's 48 MiB working set.
-- **Markerless.** Candidate regions come from container structure; only the AEAD tag confirms one is ours.
-- **Precise errors, uniform UI.** The engine distinguishes "wrong passphrase" from "nothing hidden" so
-  integrators can debug. Showing that difference to whoever holds the file reveals whether it holds anything —
-  read `src/error.rs` before designing a reveal screen.
+Start with the module docs (`cargo doc --open`) in `crates/zolal-core`: `src/lib.rs`, then `src/crypto/mod.rs` and
+`src/carrier/jpeg.rs`.
 
-Licence: Apache-2.0, see `LICENSE` and `NOTICE`.
+One thing to get right: the engine tells "wrong passphrase" apart from "nothing hidden" so you can debug.
+**Don't show that difference to users.** It tells anyone holding the file whether it contains something.
+Show one message for every failed reveal and make it take the same time. `src/error.rs` explains why.
+
+## Contributing
+
+Issues and pull requests are welcome: bug fixes, new carrier formats, docs, UI. Read
+[CONTRIBUTING.md](CONTRIBUTING.md) for how to run the checks and send a pull request. Report security
+problems privately to hi@blackbiene.dev.
+
+## Licence
+
+Copyright 2026 [Black Biene](https://blackbiene.dev). Licensed under the [Apache License 2.0](LICENSE).
+
+You're free to use Zolal core in your own projects, including commercial and closed-source ones. In return,
+you must **credit Black Biene** by keeping the [`NOTICE`](NOTICE) file with any copy or product you build
+on it, and say which files you changed.

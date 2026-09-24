@@ -168,8 +168,8 @@ $("hide").onclick = async () => {
       [strong("Done. "), `${payloads.length === 1 ? "Your file is" : `${payloads.length} files are`} hidden in ` +
         `${carrier.name}, which has been downloaded.`],
       el("p", "small", `${human(carrier.size)} → ${human(out.data.length)}. ${note}`),
-      el("p", "small", "Send it as a file (or in a .zip). Apps that compress photos and videos will strip " +
-        "what's hidden."),
+      el("p", "small", "Remember: send it as a file or document (or in a .zip), not as a photo or video. " +
+        "WhatsApp, Telegram and other chat apps compress photos and videos, and that deletes what's hidden."),
       again);
   } finally {
     button.disabled = false;
@@ -194,7 +194,9 @@ $("reveal").onclick = async () => {
     if (r.code !== 0 || !found.length) {
       await sleep(REVEAL_MIN_MS - (performance.now() - started));
       return show(box, "err", [strong("Nothing could be opened. "),
-        "Check the passphrase, and that this is the file something was hidden in."]);
+        "Check the passphrase, and that this is the file something was hidden in."],
+        el("p", "small", "If it was sent as a photo or video in WhatsApp, Telegram or another chat app, the app " +
+          "may have compressed it and deleted what was hidden. Ask for it again as a file or document."));
     }
     const list = el("ul", "files", ...found.map(([name, f]) => {
       const b = el("button", "", "Download");
