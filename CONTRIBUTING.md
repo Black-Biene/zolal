@@ -1,4 +1,4 @@
-# Contributing to Zolal core
+# Contributing to Zolal
 
 Thanks for helping make Zolal better. Bug reports, fixes, new carrier formats, docs and UI improvements
 are all welcome.
@@ -32,9 +32,8 @@ Ground rules that keep the engine safe to use:
 - **Stream, don't buffer.** Work from paths and readers; memory must not grow with file size.
 - **Stay markerless.** Nothing in the hidden data may identify it as Zolal's in the clear.
 - **Permissive dependencies only.** `cargo deny check` enforces the allow-list in `deny.toml`.
-- **Keep `zolal-core` platform-free.** No iOS or Apple dependencies in the engine crate.
 
 ## Licence of contributions
 
-Zolal core is licensed under [Apache-2.0](LICENSE). By sending a pull request you agree that your
+Zolal is licensed under [Apache-2.0](LICENSE). By sending a pull request you agree that your
 contribution is licensed under the same terms (Apache-2.0, section 5). You keep the copyright to your work.

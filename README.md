@@ -1,4 +1,4 @@
-# Zolal core
+# Zolal
 
 Hide encrypted files inside ordinary photos, videos and PDFs. The result still opens normally in any viewer.
 
@@ -25,17 +25,8 @@ the picture, video or document itself is untouched.
 sent as media, which deletes the hidden data. Send them as a document/file, by email, or in a .zip.
 
 **What it's not:** forensic-grade steganography. The file gets bigger, so someone comparing sizes can tell
-something was added. It protects against a casual look, not a trained analyst. `plausibility()` reports how
-noticeable the size change is, so apps can be honest about it.
-
-## Project layout
-
-| Crate | What it is |
-|---|---|
-| [`zolal-core`](crates/zolal-core) | The engine: encryption, bundling files, and the JPEG/MP4/PDF carriers |
-| [`zolal-ffi`](crates/zolal-ffi) | C interface (`include/zolal.h`) built as a static library for Swift/iOS |
-| [`zolal-cli`](crates/zolal-cli) | Command-line tool for developers; also what the web page runs |
-| [`web/`](web) | The browser version: the CLI compiled to WebAssembly |
+something was added. It protects against a casual look, not a trained analyst. The page tells you how
+noticeable the size change is.
 
 ## Getting started
 
@@ -50,8 +41,6 @@ cargo run -p zolal-cli -- clean  out.jpg plain.jpg             --pass 'pw'
 
 Set `ZOLAL_PASS` instead of `--pass` to keep the passphrase out of your shell history.
 
-For iOS, `./build-xcframework.sh` builds `Zolal.xcframework` (needs Xcode).
-
 ### Run the web version locally
 
 ```bash
@@ -63,14 +52,14 @@ python3 -m http.server -d web
 Every push to `main` publishes `web/` to GitHub Pages. The page only loads its own files: a
 Content-Security-Policy blocks every other site, and a service worker lets it open offline.
 
-## Building an app on it
+## Reading the code
 
-Start with the module docs (`cargo doc --open`) in `crates/zolal-core`: `src/lib.rs`, then `src/crypto/mod.rs` and
-`src/carrier/jpeg.rs`.
+The engine is in `crates/zolal-core`. Start with its module docs (`cargo doc --open`): `src/lib.rs`, then
+`src/crypto/mod.rs` and `src/carrier/jpeg.rs`.
 
-One thing to get right: the engine tells "wrong passphrase" apart from "nothing hidden" so you can debug.
-**Don't show that difference to users.** It tells anyone holding the file whether it contains something.
-Show one message for every failed reveal and make it take the same time. `src/error.rs` explains why.
+The engine tells "wrong passphrase" apart from "nothing hidden", but the page never shows the difference: it
+would tell anyone holding a file whether something is inside. Every failed reveal gets the same message and
+takes the same time. `src/error.rs` explains why.
 
 ## Contributing
 
@@ -82,6 +71,6 @@ problems privately to hi@blackbiene.dev.
 
 Copyright 2026 [Black Biene](https://blackbiene.dev). Licensed under the [Apache License 2.0](LICENSE).
 
-You're free to use Zolal core in your own projects, including commercial and closed-source ones. In return,
+You're free to use Zolal in your own projects, including commercial and closed-source ones. In return,
 you must **credit Black Biene** by keeping the [`NOTICE`](NOTICE) file with any copy or product you build
 on it, and say which files you changed.
