@@ -3,7 +3,7 @@
 import { WASI, File, OpenFile, PreopenDirectory, ConsoleStdout } from "./vendor/browser_wasi_shim/index.js";
 
 const $ = id => document.getElementById(id);
-const wasm = fetch("zolal-cli.wasm").then(r => WebAssembly.compileStreaming(r));
+const wasm = fetch("zolal-cli.wasm?v=dev").then(r => WebAssembly.compileStreaming(r));
 wasm.catch(() => {
   for (const b of document.querySelectorAll(".primary")) b.disabled = true;
   show($("hide-status"), "err", [strong("Couldn't load. "), "Check your connection and reload the page."]);

@@ -5,7 +5,7 @@ are all welcome.
 
 ## Reporting a problem
 
-Open an [issue](https://github.com/Black-Biene/zolal-core/issues) with what you did, what you expected and
+Open an [issue](https://github.com/Black-Biene/zolal/issues) with what you did, what you expected and
 what happened. Attach a sample file if you can, but **never one that holds anything real**: make a fresh
 one with a throwaway passphrase.
 

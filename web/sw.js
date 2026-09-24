@@ -1,9 +1,9 @@
 // Offline support. Network first so a new deploy is picked up whenever there is a connection; the cache is the
 // fallback when there isn't. Only this site's own files are ever requested, so only those are cached.
-const CACHE = "zolal";
+const CACHE = "zolal-?v=dev";
 const SHIM = "vendor/browser_wasi_shim/";
 const FILES = [
-  "./", "index.html", "style.css", "app.js", "icon.svg", "zolal-cli.wasm",
+  "./", "index.html", "style.css?v=dev", "app.js?v=dev", "icon.svg?v=dev", "zolal-cli.wasm?v=dev",
   ...["index", "wasi", "wasi_defs", "fd", "fs_mem", "fs_opfs", "strace", "debug"].map(f => SHIM + f + ".js"),
 ];
 

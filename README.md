@@ -2,7 +2,7 @@
 
 Hide encrypted files inside ordinary photos, videos and PDFs. The result still opens normally in any viewer.
 
-**[Try it in your browser](https://black-biene.github.io/zolal-core/)**: it runs entirely on your device,
+**[Try it in your browser](https://black-biene.github.io/zolal/)**: it runs entirely on your device,
 uploads nothing and works offline once loaded.
 
 ## How it works

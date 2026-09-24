@@ -10,6 +10,8 @@ jobs:
       - run: rustup target add wasm32-wasip1
       - run: cargo build --release -p zolal-cli --target wasm32-wasip1 --locked
       - run: cp target/wasm32-wasip1/release/zolal-cli.wasm web/
+      # Tag asset URLs with the commit so browsers never mix a new page with cached old files.
+      - run: sed -i "s/?v=dev/?v=${GITHUB_SHA::8}/g" web/index.html web/app.js web/sw.js
       - uses: actions/upload-pages-artifact@v3
         with: { path: web }
       - id: deploy

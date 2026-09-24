@@ -15,7 +15,7 @@ rust-version = "1.88"
 # attribution in NOTICE.
 license = "Apache-2.0"
 authors = ["Black Biene <hi@blackbiene.dev>"]
-repository = "https://github.com/Black-Biene/zolal-core"
+repository = "https://github.com/Black-Biene/zolal"
 homepage = "https://blackbiene.dev"
 publish = false
 
