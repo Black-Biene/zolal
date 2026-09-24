@@ -1,0 +1,7 @@
+// Lets Swift `import ZolalFFI` when the XCFramework is linked, instead of needing a bridging
+// header. A Swift wrapper can import it conditionally (`#if canImport(ZolalFFI)`), so it also
+// builds in setups that use a bridging header instead.
+module ZolalFFI {
+    header "zolal.h"
+    export *
+}

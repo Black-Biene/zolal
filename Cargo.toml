@@ -1,0 +1,61 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/zolal-core",
+    "crates/zolal-ffi",
+    "crates/zolal-cli",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+# Floor set by the dependency tree (lopdf 0.45, time, encoding_rs), not by our own code.
+rust-version = "1.88"
+# Apache-2.0 alone, not the usual "MIT OR Apache-2.0": the MIT option would let users skip the
+# attribution in NOTICE.
+license = "Apache-2.0"
+publish = false
+
+# Shared dependency versions. Every entry must be permissive-licensed
+# (MIT / Apache-2.0 / BSD / ISC / Zlib), so the engine can be linked into any product,
+# closed-source ones included.
+# `cargo deny check licenses` enforces this.
+[workspace.dependencies]
+# --- crypto (RustCrypto, MIT/Apache-2.0) ---
+# `alloc` is what makes `Vec<u8>` an in-place AEAD buffer; `zeroize` wipes cipher state on drop.
+# The default `getrandom` feature is dropped: we call `getrandom` directly.
+chacha20poly1305 = { version = "0.11", default-features = false, features = ["alloc", "zeroize"] }
+aead-stream = "0.6"   # STREAM/BE32 — split out of `aead` in 0.6 (was the `stream` feature)
+# Raw KDF only. The defaults add the PHC `password-hash` string format, which we never use;
+# `zeroize` wipes Argon2's working memory (tens of MiB of passphrase-derived state) on drop.
+argon2 = { version = "0.6", default-features = false, features = ["alloc", "zeroize"] }
+getrandom = "0.4"     # salt + nonce prefix
+zeroize = { version = "1", features = ["derive"] }
+secrecy = "0.10"
+
+# --- containers ---
+# No container crate ships: every carrier walks its format by hand so a huge hidden payload is
+# never loaded into memory. `img-parts` was dropped outright; `mp4` and `lopdf`
+# survive only as dev-dependencies of zolal-core, for building valid test fixtures and
+# re-parsing stego output.
+mp4 = "0.14"        # MIT — ISOBMFF box tree (test fixtures only)
+# MIT — PDF objects / xref (test fixtures only; `carrier/pdf.rs` parses by hand).
+# Defaults pull in rayon + chrono, which we never use.
+lopdf = { version = "0.45", default-features = false }
+
+# --- misc ---
+thiserror = "2"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+# Unwind rather than abort: `zolal-ffi` wraps every entry point in `catch_unwind`, so a panic
+# on a malformed file surfaces to Swift as an error instead of killing the app. Aborting would
+# make that impossible, and a crash report is a poor way to tell a user their photo is corrupt.
+panic = "unwind"
+strip = true
+
+# Keep debug builds usable for large-file work.
+[profile.dev]
+opt-level = 1

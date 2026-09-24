@@ -1,0 +1,62 @@
+# cargo-deny — dependency policy.
+#
+# Only permissive licences may be linked, so the engine can be embedded in any product,
+# closed-source apps included. A GPL/AGPL dependency sneaking in transitively would impose its
+# terms on everything that links this library; this config makes that a build failure instead
+# of a legal surprise.
+#
+# Run: cargo deny check
+
+[graph]
+# The rule is about what ships. Dev-dependencies (test fixture generators, decoders used only to
+# assert "the carrier still opens") never reach the app binary, so they are out of scope here.
+# That covers `jpeg-encoder`, whose licence is `(MIT OR Apache-2.0) AND IJG`. (cargo-deny 0.20.2
+# already leaves it out of the graph without this line; it stays as a statement of intent.)
+exclude-dev = true
+
+[licenses]
+# Reject anything not explicitly allowed.
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "Zlib",
+    "Unicode-3.0",
+    "Unlicense",
+]
+confidence-threshold = 0.93
+# The allow list is a policy, not an inventory: entries nothing uses yet are fine.
+unused-allowed-license = "allow"
+
+# Our own crates are unpublished (`publish = false`). Skip them — the rule is about what we
+# *link*, not what we are.
+[licenses.private]
+ignore = true
+
+# MPL-2.0 is file-level copyleft and is fine when linked unmodified, but it is left OUT of
+# `allow` so that taking an MPL dependency is a deliberate act, not an accident.
+
+[bans]
+# phasm-core (GPL-3.0) does DCT-domain JPEG steganography, a neighbouring problem. Linking or
+# vendoring it would put this engine under GPL-3.0, so it is banned outright.
+deny = [
+    { name = "phasm-core" },
+    { name = "phasm-cli" },
+]
+multiple-versions = "warn"
+wildcards = "deny"
+# Intra-workspace `path = "../zolal-core"` deps have no version and would otherwise count as
+# wildcards. Only permitted for unpublished crates, which all of ours are.
+allow-wildcard-paths = true
+
+[advisories]
+# Fail on known vulnerabilities. We parse attacker-supplied files during `reveal`,
+# which is this library's main attack surface.
+yanked = "deny"
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"

@@ -1,0 +1,35 @@
+[package]
+name = "zolal-core"
+description = "Zolal engine: container-based hiding of encrypted payloads in JPEG, MP4 and PDF carriers."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+# IMPORTANT: this crate must stay free of any iOS/Apple dependency.
+# It is the seam that would be extracted into its own public repo if the
+# engine is ever open-sourced, and "builds on desktop with no iOS deps" is the
+# automated guard for that seam.
+[dependencies]
+chacha20poly1305.workspace = true
+aead-stream.workspace = true
+argon2.workspace = true
+getrandom.workspace = true
+zeroize.workspace = true
+secrecy.workspace = true
+thiserror.workspace = true
+
+# Test-only. None of these ship, so the licence rule for linked code doesn't apply (deny.toml
+# excludes dev-dependencies). `jpeg-encoder` is `(MIT OR Apache-2.0) AND IJG`; IJG is permissive.
+#
+# `mp4` and `lopdf` are dev-only *on purpose*: the MP4 and PDF walkers are hand-written and
+# streaming (a huge hidden payload must never be loaded into RAM), while both crates parse from
+# memory. The tests use them to build valid fixtures and to independently re-parse the stego
+# file, proving "the video/document still opens" the way `jpeg-decoder` does for JPEG.
+[dev-dependencies]
+tempfile = "3"
+jpeg-encoder = "0.7"                                          # synthetic carriers
+jpeg-decoder = { version = "0.3", default-features = false }  # "the disguise still decodes"
+mp4.workspace = true                                          # valid MP4 fixtures + independent re-parse
+lopdf.workspace = true                                        # independent re-parse of stego PDFs

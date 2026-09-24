@@ -1,0 +1,10 @@
+[toolchain]
+channel = "stable"
+components = ["rustfmt", "clippy"]
+# The iOS targets are for `build-xcframework.sh`, listed so `rustup` provisions them in one
+# step. Desktop builds and tests don't use them.
+targets = [
+    "aarch64-apple-ios",
+    "aarch64-apple-ios-sim",
+    "x86_64-apple-ios",
+]

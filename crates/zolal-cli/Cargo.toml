@@ -1,0 +1,12 @@
+[package]
+name = "zolal-cli"
+description = "Developer CLI for exercising zolal-core on desktop. Not shipped."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+zolal-core = { path = "../zolal-core" }
+secrecy.workspace = true

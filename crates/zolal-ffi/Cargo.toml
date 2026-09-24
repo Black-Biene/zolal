@@ -1,0 +1,22 @@
+[package]
+name = "zolal-ffi"
+description = "Swift bindings for zolal-core. Built as a static library for the iOS XCFramework."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lib]
+# `staticlib` is what the XCFramework embeds and what Swift links against; `rlib` is what this
+# workspace's own tests link. No `cdylib`: nothing generates bindings from a dynamic library
+# (the header is hand-written), iOS apps cannot ship one anyway, and building it requires the
+# full iOS SDK, so it would make `cargo build --target aarch64-apple-ios` need Xcode.
+crate-type = ["staticlib", "rlib"]
+
+[dependencies]
+zolal-core = { path = "../zolal-core" }
+secrecy.workspace = true
+
+[dev-dependencies]
+tempfile = "3"
