@@ -202,7 +202,8 @@ $("read").onclick = () => {
     worker.terminate();
     button.disabled = false;
     corners = data.corners;
-    drawFound(corners);
+    // outline the edges the reader used, only when it actually found the text
+    if (data.text !== null) drawFound(corners);
     const diag = `signal ${Math.round(data.match * 100)}% · shot ${shotInfo} · ${(data.ms / 1000).toFixed(1)} s`;
     if (data.text !== null) say(statusBox, "ok", `Found: “${data.text}”  (${diag})`);
     else say(statusBox, "err", `No hidden text found (${diag}).${tooSmall()} Signal around 75–78% means no pattern was seen at ` +

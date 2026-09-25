@@ -27,5 +27,6 @@
 .grip[data-g="bl"] { left: -6px; bottom: -6px; border-right: 0; border-top: 0; cursor: nesw-resize }
 .quad { position: absolute; inset: 0; pointer-events: none }
 .fullscreen { position: fixed; inset: 0; z-index: 10; background: #fff; display: grid; place-items: center; padding: 6vmin }
-.fullscreen canvas { max-width: 88vw; max-height: 88vh; width: auto; height: auto }
+/* a thin dark frame right around the picture so its edges are clear whatever its colours */
+.fullscreen canvas { max-width: 86vw; max-height: 86vh; width: auto; height: auto; outline: max(3px, .5vmin) solid #333; outline-offset: 0 }
 .fullscreen[hidden] { display: none }

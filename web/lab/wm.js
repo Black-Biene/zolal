@@ -222,8 +222,16 @@ export function embed(source, text) {
     const f = (up[o] * (1 - fx) + up[o + 1] * fx) * (1 - fy) + (up[o + PW] * (1 - fx) + up[o + PW + 1] * fx) * fy;
     const i = y * W + x, m = 0.5 + 0.5 * Math.min(1, actS[i] / 10);
     const d = STRENGTH * m * (f / peak) * 2; // change in Cb
-    px[4 * i + 2] = Math.max(0, Math.min(255, Math.round(px[4 * i + 2] + 1.773 * d)));
-    px[4 * i + 1] = Math.max(0, Math.min(255, Math.round(px[4 * i + 1] - 0.344 * d)));
+    // Cb is raised by adding blue and removing a little green. Near white or black that would clip and lose
+    // the change, so shift all three channels together instead: an equal shift of R, G and B leaves Cb and
+    // Cr exactly as they are and only nudges brightness.
+    let R = px[4 * i], Gr = px[4 * i + 1] - 0.344 * d, B = px[4 * i + 2] + 1.773 * d;
+    const over = Math.max(R, Gr, B) - 255, under = Math.min(R, Gr, B);
+    const shift = over > 0 ? -over : under < 0 ? -under : 0;
+    R += shift; Gr += shift; B += shift;
+    px[4 * i] = Math.round(Math.max(0, Math.min(255, R)));
+    px[4 * i + 1] = Math.round(Math.max(0, Math.min(255, Gr)));
+    px[4 * i + 2] = Math.round(Math.max(0, Math.min(255, B)));
   }
   ctx.putImageData(img, 0, 0);
   return canvas;
@@ -479,7 +487,8 @@ export function read(img, corners, { onStep } = {}) {
   for (const r of cands) if (attempt(corners, r, 0)) return best;
   // hand-placed corners on a phone are tens of pixels off: snap them to the picture's edges
   const snap = snapToEdges(img, corners);
-  const snapped = snap ? snap.corners : corners;
+  // only trust the snapped outline if the pattern reads better there than inside the box as drawn
+  const snapped = snap && snap.match > best.match + 0.01 ? snap.corners : corners;
   const cands2 = snap ? [snap.r, ...nearestRatios(ratioOf(snapped), 3).filter(r => r !== snap.r)].slice(0, 3)
     : nearestRatios(ratioOf(snapped), 3);
   for (const r of cands2) if (attempt(snapped, r, 1)) return best;
