@@ -281,13 +281,13 @@ export function softBits(img, corners, f = 1) {
 
 const strength = soft => soft.reduce((s, v) => s + Math.abs(v), 0);
 
-// Nudge each corner coordinate to where the hidden pattern is strongest: big steps at half resolution,
-// the last fine steps at full resolution.
+// Nudge each corner coordinate to where the hidden pattern is strongest: every step but the last at half
+// resolution (4x cheaper), the final 1 px step at full resolution.
 export function refine(img, corners, onStep = () => {}) {
   let best = corners.map(p => p.slice()), f = 0, bestScore = 0;
   const scale = Math.max(img.width, img.height) / 1920; // step sizes relative to a 1080p frame
   for (const step of [16, 8, 4, 2, 1]) {
-    const res = step >= 4 ? 2 : 1;
+    const res = step >= 2 ? 2 : 1;
     if (res !== f) { f = res; bestScore = strength(softBits(img, best, f)); }
     for (let round = 0; round < 2; round++) {
       let improved = false;
