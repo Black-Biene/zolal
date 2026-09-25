@@ -76,7 +76,8 @@ $("read-camera").onclick = async () => {
   $("corners").hidden = true;
   try {
     stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: "environment", width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false,
+      // ask for 4K: browsers often default to 720p, too coarse for the pattern
+      video: { facingMode: "environment", width: { ideal: 3840 }, height: { ideal: 2160 } }, audio: false,
     });
   } catch (e) {
     return alert("Camera not available: " + e.message);
@@ -85,6 +86,9 @@ $("read-camera").onclick = async () => {
   v.srcObject = stream;
   await v.play();
   $("camera").hidden = false;
+  const s = stream.getVideoTracks()[0].getSettings();
+  $("cam-res").textContent = `Camera: ${s.width ?? v.videoWidth}×${s.height ?? v.videoHeight}` +
+    ((s.width ?? v.videoWidth) < 1920 ? " (low; the phone's own camera app gives sharper shots, see below)" : "");
 };
 
 $("capture").onclick = () => {
@@ -111,7 +115,15 @@ $("read-file").onchange = async () => {
 
 // ---- read: corner editor -------------------------------------------------------------------------------
 
-let shot = null, corners = null;
+let shot = null, corners = null, shotInfo = "";
+
+// Save the captured frame and the corners (in the file name) so a failing case can be analysed.
+$("save-shot").onclick = () => shot.toBlob(b => {
+  const a = document.createElement("a");
+  const c = corners.map(p => p.map(Math.round).join("x")).join("_");
+  a.href = URL.createObjectURL(b); a.download = `zolal-shot_${c}.png`; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 60_000);
+}, "image/png");
 const dots = [...document.querySelectorAll(".dot")];
 
 function openEditor(canvas, start) {
@@ -149,6 +161,7 @@ for (const d of dots) {
 
 $("read").onclick = () => {
   const box = $("read-status"), button = $("read");
+  shotInfo = `${shot.width}x${shot.height}`;
   const img = shot.getContext("2d").getImageData(0, 0, shot.width, shot.height);
   button.disabled = true;
   say(box, "busy", "Reading… (aligning the corners)");
@@ -159,9 +172,12 @@ $("read").onclick = () => {
     button.disabled = false;
     corners = data.corners;
     placeDots();
-    if (data.text !== null) say(box, "ok", `Found: “${data.text}”  (${(data.ms / 1000).toFixed(1)} s)`);
-    else say(box, "err", `No hidden text found (${(data.ms / 1000).toFixed(1)} s). Move the dots closer to the ` +
-      "corners, or capture again closer and steadier.");
+    const diag = `signal ${Math.round(data.match * 100)}% · shot ${shotInfo} · ${(data.ms / 1000).toFixed(1)} s`;
+    if (data.text !== null) say(box, "ok", `Found: “${data.text}”  (${diag})`);
+    else say(box, "err", `No hidden text found (${diag}). Signal around 75–78% means no pattern was seen at ` +
+      "all; 80–95% means it's there but too weak (a clean file reads about 99%). Try closer, steadier, or the " +
+      "phone's own camera app.");
+    $("save-shot").hidden = false;
   };
   worker.onerror = e => { button.disabled = false; say(box, "err", "Error: " + e.message); };
   worker.postMessage({ img, corners });

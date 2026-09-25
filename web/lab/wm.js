@@ -303,11 +303,18 @@ export function refine(img, corners, { steps = [16, 8, 4, 2, 1], full = false, o
   return best;
 }
 
+// Decode at these corners. `match` is how many raw bits agree with the best codeword: about 75–78% when there
+// is no pattern at all (the decoder always finds the nearest codeword), about 99% for a clean file. A
+// diagnostic for real-camera tests.
 function decodeAt(img, corners) {
   const soft = softBits(img, corners).slice(0, (MSG_BITS + K - 1) * RATE);
   const sorted = Array.from(soft, Math.abs).sort((a, b) => a - b);
   const med = sorted[sorted.length >> 1] || 1;
-  return unframe(convDecode(Array.from(soft, v => Math.max(-3, Math.min(3, v / med))), MSG_BITS));
+  const bits = convDecode(Array.from(soft, v => Math.max(-3, Math.min(3, v / med))), MSG_BITS);
+  const code = convEncode(bits);
+  let agree = 0;
+  for (let i = 0; i < code.length; i++) agree += (soft[i] > 0) === (code[i] === 1);
+  return { text: unframe(bits), match: agree / code.length };
 }
 
 // Decode the text from a picture whose corners (tl, tr, br, bl) are roughly known. Tries the cheap way first
@@ -315,11 +322,11 @@ function decodeAt(img, corners) {
 // after a fast half-resolution alignment, then after a precise full-resolution one. Returns { text | null,
 // corners, stage }.
 export function read(img, corners, { onStep } = {}) {
-  let c = corners, text = decodeAt(img, c);
-  if (text !== null) return { text, corners: c, stage: 0 };
+  let c = corners, r = decodeAt(img, c);
+  if (r.text !== null) return { ...r, corners: c, stage: 0 };
   c = refine(img, c, { onStep });
-  text = decodeAt(img, c);
-  if (text !== null) return { text, corners: c, stage: 1 };
+  r = decodeAt(img, c);
+  if (r.text !== null) return { ...r, corners: c, stage: 1 };
   c = refine(img, c, { steps: [4, 2, 1], full: true, onStep });
-  return { text: decodeAt(img, c), corners: c, stage: 2 };
+  return { ...decodeAt(img, c), corners: c, stage: 2 };
 }
