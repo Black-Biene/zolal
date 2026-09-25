@@ -27,16 +27,41 @@ function mulberry32(seed) {
 const RATIOS = [1 / 3, 2 / 5, 1 / 2, 9 / 16, 2 / 3, 3 / 4, 1, 4 / 3, 3 / 2, 16 / 9, 2, 5 / 2, 3];
 const CELLS = 102 * 102;
 
+// Invisible finder patterns: a PILOT x PILOT block of cells in each corner carries a fixed, known chip pattern
+// instead of message bits. The reader searches for these known blocks to locate the picture's corners in a
+// camera shot, the way a QR reader finds its three corner squares, but hidden in the same faint colour
+// texture as the rest of the pattern. Local coordinates are in the picture's orientation (x right, y down).
+export const PILOT = 16;
+const PILOT_GAIN = 1.4; // finder blocks are a little stronger than the message cells
+const PILOT_CHIPS = (() => {
+  const rand = mulberry32(0x5EED);
+  return [0, 1, 2, 3].map(() => Int8Array.from({ length: PILOT * PILOT }, () => rand() < 0.5 ? -1 : 1));
+})();
+
+// Which corner block a cell is in (0 tl, 1 tr, 2 br, 3 bl), and its index inside that block; or -1.
+function pilotOf(cx, cy, gw, gh) {
+  const right = cx >= gw - PILOT, bottom = cy >= gh - PILOT;
+  if ((cx >= PILOT && !right) || (cy >= PILOT && !bottom)) return [-1, 0];
+  const k = bottom ? (right ? 2 : 3) : (right ? 1 : 0);
+  const lx = right ? cx - (gw - PILOT) : cx, ly = bottom ? cy - (gh - PILOT) : cy;
+  return [k, ly * PILOT + lx];
+}
+
 const layouts = new Map();
 function layout(r) {
   let L = layouts.get(r);
   if (!L) {
     const ratio = RATIOS[r], gw = Math.round(Math.sqrt(CELLS * ratio)), gh = Math.round(CELLS / gw);
     const n = gw * gh, rand = mulberry32(KEY * 131 + r);
-    const chips = new Int8Array(n), owner = new Int32Array(n), perm = new Int32Array(n);
-    for (let i = 0; i < n; i++) { chips[i] = rand() < 0.5 ? -1 : 1; perm[i] = i; }
-    for (let i = n - 1; i > 0; i--) { const j = Math.floor(rand() * (i + 1)); [perm[i], perm[j]] = [perm[j], perm[i]]; }
-    for (let i = 0; i < n; i++) owner[perm[i]] = i % RAW;
+    // owner: the raw bit a cell carries, or -1 for a finder cell (whose chip is fixed)
+    const chips = new Int8Array(n), owner = new Int32Array(n), data = [];
+    for (let cy = 0; cy < gh; cy++) for (let cx = 0; cx < gw; cx++) {
+      const i = cy * gw + cx, [k, j] = pilotOf(cx, cy, gw, gh);
+      chips[i] = rand() < 0.5 ? -1 : 1;
+      if (k >= 0) { chips[i] = PILOT_CHIPS[k][j]; owner[i] = -1; } else data.push(i);
+    }
+    for (let i = data.length - 1; i > 0; i--) { const j = Math.floor(rand() * (i + 1)); [data[i], data[j]] = [data[j], data[i]]; }
+    data.forEach((cell, i) => { owner[cell] = i % RAW; });
     L = { gw, gh, chips, owner };
     layouts.set(r, L);
   }
@@ -203,9 +228,10 @@ export function embed(source, text) {
   const bits = new Int8Array(RAW); bits.set(coded);
   const L = layout(nearestRatios(W / H, 1)[0]), PW = L.gw * CELL, PH = L.gh * CELL;
   const grid = new Float32Array(L.gw * L.gh);
-  for (let i = 0; i < grid.length; i++) grid[i] = L.chips[i] * (bits[L.owner[i]] ? 1 : -1);
+  for (let i = 0; i < grid.length; i++) grid[i] = L.owner[i] < 0 ? PILOT_GAIN * L.chips[i] : L.chips[i] * (bits[L.owner[i]] ? 1 : -1);
   const up = blur(upsampleCubic(grid, L.gw, L.gh, CELL), PW, PH, CELL / 6);
   let peak = 0; for (const v of up) peak = Math.max(peak, Math.abs(v));
+  peak /= PILOT_GAIN; // normalise to the message cells' level; finder blocks end up PILOT_GAIN stronger
 
   // texture mask from luminance: flat areas get half strength
   const Y = new Float32Array(W * H);
@@ -297,7 +323,7 @@ export function softBits(img, corners, r, f = 1) {
       }
     }
     const idx = cy * L.gw + cx;
-    soft[L.owner[idx]] += acc * L.chips[idx];
+    if (L.owner[idx] >= 0) soft[L.owner[idx]] += acc * L.chips[idx];
   }
   return soft;
 }
@@ -466,6 +492,92 @@ export function snapToEdges(img, corners) {
   return best;
 }
 
+// ---- finding the picture by its invisible corner finders ---------------------------------------------------
+
+function downscale(plane, W, H, k) {
+  if (k <= 1) return { plane, W, H };
+  const w = Math.floor(W / k), h = Math.floor(H / k), out = new Float32Array(w * h), inv = 1 / (k * k);
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    let acc = 0;
+    for (let j = 0; j < k; j++) { const row = (y * k + j) * W + x * k; for (let i = 0; i < k; i++) acc += plane[row + i]; }
+    out[y * w + x] = acc * inv;
+  }
+  return { plane: out, W: w, H: h };
+}
+
+const unit = (p, q) => { const dx = q[0] - p[0], dy = q[1] - p[1], l = Math.hypot(dx, dy) || 1; return [dx / l, dy / l]; };
+const rot = ([x, y], t) => [x * Math.cos(t) - y * Math.sin(t), x * Math.sin(t) + y * Math.cos(t)];
+
+// Locate the picture's four corners inside a rough box (tl, tr, br, bl) by searching near each box corner for
+// that corner's known finder block, over a range of sizes and small tilts. Returns, per corner, up to two
+// candidate points (best first) with their match scores.
+export function findCorners(img, box) {
+  const d = (p, q) => Math.hypot(q[0] - p[0], q[1] - p[1]);
+  const boxW = (d(box[0], box[1]) + d(box[3], box[2])) / 2, boxH = (d(box[0], box[3]) + d(box[1], box[2])) / 2;
+  const gwEst = Math.sqrt(CELLS * boxW / boxH), cellBox = boxW / gwEst; // cell size if the box were the picture
+  // work at a scale where a cell is about 4 px
+  const k = Math.max(1, Math.floor(cellBox * 0.8 / 4));
+  const ds = downscale(cbPlane(img), img.width, img.height, k), W = ds.W, H = ds.H;
+  const lo = blur(ds.plane, W, H, 0.9 * cellBox * 0.8 / k), hp = new Float32Array(W * H);
+  for (let i = 0; i < hp.length; i++) hp[i] = Math.max(-12, Math.min(12, ds.plane[i] - lo[i]));
+  const at = (x, y) => {
+    if (x < 0 || y < 0 || x >= W - 1 || y >= H - 1) return 0;
+    const x0 = x | 0, y0 = y | 0, fx = x - x0, fy = y - y0, i = y0 * W + x0;
+    return (hp[i] * (1 - fx) + hp[i + 1] * fx) * (1 - fy) + (hp[i + W] * (1 - fx) + hp[i + W + 1] * fx) * fy;
+  };
+  const T = 2 * PILOT; // template samples per side: two per cell
+  const scales = Array.from({ length: 8 }, (_, i) => 0.55 * Math.pow(1.1 / 0.55, i / 7));
+  const tilts = [-4, 0, 4].map(t => t * Math.PI / 180);
+  const out = [];
+  for (let c = 0; c < 4; c++) {
+    const O = [box[c][0] / k, box[c][1] / k];
+    // axes pointing into the picture from this corner
+    const u0 = unit(box[c], box[c === 0 || c === 3 ? (c === 0 ? 1 : 2) : (c === 1 ? 0 : 3)]);
+    const v0 = unit(box[c], box[c === 0 || c === 1 ? (c === 0 ? 3 : 2) : (c === 2 ? 1 : 0)]);
+    // template in (along u, along v) cell order, mapped to the block's picture orientation
+    const tmpl = new Float32Array(T * T);
+    for (let jj = 0; jj < T; jj++) for (let ii = 0; ii < T; ii++) {
+      const ci = ii >> 1, cj = jj >> 1;
+      const x = c === 1 || c === 2 ? PILOT - 1 - ci : ci, y = c === 2 || c === 3 ? PILOT - 1 - cj : cj;
+      tmpl[jj * T + ii] = PILOT_CHIPS[c][y * PILOT + x];
+    }
+    const side = Math.min(boxW, boxH) / k, from = -0.06 * side, to = 0.32 * side;
+    const found = [];
+    for (const f of scales) for (const t of tilts) {
+      const step = cellBox * f / k / 2, u = rot(u0, t), v = rot(v0, t);
+      const n = Math.max(1, Math.round((to - from) / step)), G = n + T, g = new Float32Array(G * G);
+      for (let j = 0; j < G; j++) for (let i = 0; i < G; i++) {
+        const a = from + (i + 0.5) * step, b = from + (j + 0.5) * step;
+        g[j * G + i] = at(O[0] + a * u[0] + b * v[0], O[1] + a * u[1] + b * v[1]);
+      }
+      // prefix sums of squares, to normalise each window's correlation by its energy
+      const sq = new Float64Array((G + 1) * (G + 1));
+      for (let j = 0; j < G; j++) for (let i = 0; i < G; i++)
+        sq[(j + 1) * (G + 1) + i + 1] = g[j * G + i] ** 2 + sq[j * (G + 1) + i + 1] + sq[(j + 1) * (G + 1) + i] - sq[j * (G + 1) + i];
+      for (let q = 0; q < n; q++) for (let p = 0; p < n; p++) {
+        let acc = 0;
+        for (let jj = 0; jj < T; jj++) {
+          const row = (q + jj) * G + p, trow = jj * T;
+          for (let ii = 0; ii < T; ii++) acc += tmpl[trow + ii] * g[row + ii];
+        }
+        const e = sq[(q + T) * (G + 1) + p + T] - sq[q * (G + 1) + p + T] - sq[(q + T) * (G + 1) + p] + sq[q * (G + 1) + p];
+        const score = acc / Math.sqrt(e + 1e-6);
+        const a = from + p * step, b = from + q * step;
+        found.push([score, (O[0] + a * u[0] + b * v[0]) * k, (O[1] + a * u[1] + b * v[1]) * k]);
+      }
+    }
+    found.sort((x, y) => y[0] - x[0]);
+    const picks = [];
+    for (const [score, x, y] of found) {
+      if (picks.some(pk => Math.hypot(pk.p[0] - x, pk.p[1] - y) < 3 * cellBox * 0.5)) continue;
+      picks.push({ p: [x, y], score });
+      if (picks.length === 2) break;
+    }
+    out.push(picks);
+  }
+  return out;
+}
+
 // Width:height of the picture from its corners (averaging opposite sides; perspective makes this rough).
 export function ratioOf(c) {
   const d = (p, q) => Math.hypot(q[0] - p[0], q[1] - p[1]);
@@ -485,6 +597,28 @@ export function read(img, corners, { onStep } = {}) {
   };
   const cands = nearestRatios(ratioOf(corners), 3);
   for (const r of cands) if (attempt(corners, r, 0)) return best;
+  // find the corners by their hidden finder blocks; try the combinations of each corner's two best spots, plus
+  // each corner as predicted from the other three (a weak finder in a dark or flat corner can be inferred)
+  const fc = findCorners(img, corners);
+  const top = fc.map(ps => ps[0].p);
+  for (let c = 0; c < 4; c++) {
+    const a = top[(c + 1) % 4], o = top[(c + 2) % 4], b = top[(c + 3) % 4];
+    fc[c].push({ p: [a[0] + b[0] - o[0], a[1] + b[1] - o[1]], score: 0 });
+  }
+  let fbest = null;
+  for (const a of fc[0]) for (const b of fc[1]) for (const c of fc[2]) for (const d of fc[3]) {
+    const q = [a.p, b.p, c.p, d.p];
+    for (const r of nearestRatios(ratioOf(q), 2)) {
+      const res = decodeAt(img, q, r, 2);
+      if (!fbest || res.match > fbest.match) fbest = { ...res, corners: q, r };
+      if (res.text !== null) break;
+    }
+  }
+  if (fbest) {
+    if (attempt(fbest.corners, fbest.r, 1)) return best;
+    const c = refine(img, fbest.corners, fbest.r, { steps: [4, 2, 1], onStep });
+    if (attempt(c, fbest.r, 1)) return best;
+  }
   // hand-placed corners on a phone are tens of pixels off: snap them to the picture's edges
   const snap = snapToEdges(img, corners);
   // only trust the snapped outline if the pattern reads better there than inside the box as drawn
