@@ -10,7 +10,7 @@
 .viewfinder { position: relative; border-radius: 12px; overflow: hidden; background: #000; margin-bottom: 8px }
 .viewfinder video { display: block; width: 100%; height: auto }
 .guide { position: absolute; inset: 12% 10%; border: 2px dashed rgb(255 255 255 / .85); border-radius: 6px; box-shadow: 0 0 0 999px rgb(0 0 0 / .25) }
-.editor { position: relative; margin-bottom: 12px; touch-action: none; user-select: none }
+.editor { position: relative; margin: 22px 16px 26px; touch-action: none; user-select: none }
 .editor canvas { display: block; width: 100%; height: auto; border-radius: 10px }
 .dot {
   position: absolute; width: 30px; height: 30px; margin: -15px 0 0 -15px; border-radius: 50%;

@@ -42,6 +42,23 @@ large smooth areas show a very faint colour mottling.
 Corner accuracy matters. Without refinement, ±6 px errors cut screen success to 91% and ±10 px to 53%. With
 refinement, ±10 px gives 94–100% and ±16 px gives 94% (screen) and 56% (far).
 
+### JavaScript version (`web/lab/`)
+
+The lab page ports the method to the browser, with two changes: the 1024×1024 bit grid is stretched over the
+photo whatever its shape (so the reader needn't know the aspect ratio), and the output's shorter side is
+1024 px. Reading is staged, cheapest first, stopping as soon as a CRC-16 in the message passes: the corners as
+given, then a fast half-resolution alignment, then a precise full-resolution one.
+
+Same simulated channels, four photos (one message in Persian), four trials each, corners off by up to ±10 px:
+
+| Channel | Decoded | Average read time (desktop Chromium) |
+|---|---|---|
+| Telegram-like | 16/16 | 0.1 s |
+| Telegram harsh | 16/16 | 0.1 s |
+| Camera at a screen | 16/16 | 0.7 s |
+| Camera, far | 14/16 | 5.3 s |
+| Printed | 16/16 | 2.4 s |
+
 ### What didn't work
 
 - **Block tilt in luminance** (`block_tilt.py`): survives JPEG well (100–200 bytes) but the blocks are plainly
