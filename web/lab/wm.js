@@ -261,8 +261,8 @@ export function softBits(img, corners, f = 1) {
         acc += hp * win[i] * win[j];
       }
     }
-    const cell = cy * G + cx;
-    soft[LAYOUT.owner[cell]] += acc * LAYOUT.chips[cell];
+    const idx = cy * G + cx;
+    soft[LAYOUT.owner[idx]] += acc * LAYOUT.chips[idx];
   }
   return soft;
 }
