@@ -1,0 +1,22 @@
+.lab-note { margin: 0 0 16px; padding: 10px 12px; border-radius: 10px; background: var(--warn-soft); border: 1px solid var(--warn-line); font-size: .9rem }
+.lab-note strong { color: var(--warn) }
+#panel-make, #panel-read { padding-top: 16px }
+.plain-file { font: inherit; width: 100% }
+.preview { display: block; width: 100%; height: auto; border-radius: 10px; margin: 12px 0 8px }
+.actions-row { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 12px }
+.actions-row .again { margin: 0 }
+.file-button { position: relative; overflow: hidden; display: inline-block }
+.file-button input { position: absolute; inset: 0; opacity: 0; cursor: pointer }
+.viewfinder { position: relative; border-radius: 12px; overflow: hidden; background: #000; margin-bottom: 8px }
+.viewfinder video { display: block; width: 100%; height: auto }
+.guide { position: absolute; inset: 12% 10%; border: 2px dashed rgb(255 255 255 / .85); border-radius: 6px; box-shadow: 0 0 0 999px rgb(0 0 0 / .25) }
+.editor { position: relative; margin-bottom: 12px; touch-action: none; user-select: none }
+.editor canvas { display: block; width: 100%; height: auto; border-radius: 10px }
+.dot {
+  position: absolute; width: 30px; height: 30px; margin: -15px 0 0 -15px; border-radius: 50%;
+  background: rgb(10 79 140 / .35); border: 2px solid #fff; box-shadow: 0 0 0 2px var(--accent); cursor: grab; touch-action: none;
+}
+.dot::after { content: ""; position: absolute; left: 50%; top: 50%; width: 4px; height: 4px; margin: -2px; border-radius: 50%; background: #fff }
+.fullscreen { position: fixed; inset: 0; z-index: 10; background: #000; display: grid; place-items: center }
+.fullscreen canvas { max-width: 100vw; max-height: 100vh; width: auto; height: auto }
+.fullscreen[hidden] { display: none }

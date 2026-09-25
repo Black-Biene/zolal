@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self';
+  img-src 'self'; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="no-referrer">
+<meta name="color-scheme" content="light">
+<meta name="robots" content="noindex">
+<title>Zolal Lab — camera test</title>
+<link rel="icon" href="../icon-32.png" sizes="32x32" type="image/png">
+<link rel="stylesheet" href="../style.css?v=dev">
+<link rel="stylesheet" href="lab.css?v=dev">
+
+<header class="brand">
+  <img class="logo" src="../icon-180.png" alt="" width="44" height="44">
+  <div>
+    <h1>Zolal Lab</h1>
+    <p>Camera test: hidden text you can read by pointing a camera.</p>
+  </div>
+</header>
+
+<main class="card">
+  <p class="lab-note"><strong>Experiment.</strong> Text here is not encrypted yet. Use test messages only.</p>
+
+  <div class="tabs" role="tablist">
+    <button role="tab" id="tab-make" aria-controls="panel-make" aria-selected="true">Make</button>
+    <button role="tab" id="tab-read" aria-controls="panel-read" aria-selected="false" tabindex="-1">Read</button>
+  </div>
+
+  <section id="panel-make" role="tabpanel" aria-labelledby="tab-make">
+    <ol class="steps">
+      <li class="step">
+        <h2 class="step-title"><span class="num" aria-hidden="true">1</span> Choose a photo</h2>
+        <input id="make-photo" type="file" accept="image/*" class="plain-file">
+        <p class="hint">Busy photos (trees, streets, fabric) hide the pattern best.</p>
+      </li>
+      <li class="step">
+        <h2 class="step-title"><span class="num" aria-hidden="true">2</span> Type a short text</h2>
+        <textarea id="make-text" rows="2" spellcheck="false" placeholder="meet at the old bridge, 6pm"></textarea>
+        <p class="hint" id="make-count">0 / 38 bytes</p>
+      </li>
+    </ol>
+    <button id="make" class="primary">Create marked picture</button>
+    <div id="make-status" class="status" role="status" aria-live="polite"></div>
+    <div id="make-result" hidden>
+      <canvas id="make-canvas" class="preview"></canvas>
+      <p class="actions-row">
+        <button id="make-full" class="again">Show full screen</button>
+        <button id="make-save" class="again">Download PNG</button>
+      </p>
+      <p class="hint">Test ideas: show it full screen and point another phone at it; send it to yourself on
+      Telegram as a normal photo and read the received one; print it.</p>
+    </div>
+  </section>
+
+  <section id="panel-read" role="tabpanel" aria-labelledby="tab-read" hidden>
+    <p class="actions-row">
+      <button id="read-camera" class="again">Open camera</button>
+      <label class="again file-button">Choose image<input id="read-file" type="file" accept="image/*"></label>
+    </p>
+    <div id="camera" hidden>
+      <div class="viewfinder">
+        <video id="video" playsinline muted></video>
+        <div class="guide" aria-hidden="true"></div>
+      </div>
+      <p class="hint">Fit the picture inside the frame, hold still, then capture.</p>
+      <button id="capture" class="primary">Capture</button>
+    </div>
+    <div id="corners" hidden>
+      <p class="hint">Drag the four dots onto the picture's corners. Close is enough.</p>
+      <div class="editor" id="editor">
+        <canvas id="shot"></canvas>
+        <span class="dot" data-i="0"></span><span class="dot" data-i="1"></span>
+        <span class="dot" data-i="2"></span><span class="dot" data-i="3"></span>
+      </div>
+      <div id="read-status" class="status" role="status" aria-live="polite"></div>
+      <button id="read" class="primary">Read hidden text</button>
+    </div>
+  </section>
+</main>
+
+<div id="fullscreen" class="fullscreen" hidden><canvas id="full-canvas"></canvas></div>
+
+<script type="module" src="lab.js?v=dev"></script>
+</html>
