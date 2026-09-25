@@ -281,14 +281,13 @@ export function softBits(img, corners, f = 1) {
 
 const strength = soft => soft.reduce((s, v) => s + Math.abs(v), 0);
 
-// Nudge each corner coordinate to where the hidden pattern is strongest: every step but the last at half
-// resolution (4x cheaper), the final 1 px step at full resolution.
-export function refine(img, corners, onStep = () => {}) {
-  let best = corners.map(p => p.slice()), f = 0, bestScore = 0;
-  const scale = Math.max(img.width, img.height) / 1920; // step sizes relative to a 1080p frame
-  for (const step of [16, 8, 4, 2, 1]) {
-    const res = step >= 2 ? 2 : 1;
-    if (res !== f) { f = res; bestScore = strength(softBits(img, best, f)); }
+// Nudge each corner coordinate to where the hidden pattern is strongest, one coordinate at a time.
+// `steps` are in pixels of a 1080p frame; `full` scores at full resolution (precise, ~6x slower) instead of
+// half.
+export function refine(img, corners, { steps = [16, 8, 4, 2, 1], full = false, onStep = () => {} } = {}) {
+  const f = full ? 1 : 2, scale = Math.max(img.width, img.height) / 1920;
+  let best = corners.map(p => p.slice()), bestScore = strength(softBits(img, best, f));
+  for (const step of steps) {
     for (let round = 0; round < 2; round++) {
       let improved = false;
       for (let i = 0; i < 4; i++) for (let j = 0; j < 2; j++) for (const dir of [-1, 1]) {
@@ -304,14 +303,23 @@ export function refine(img, corners, onStep = () => {}) {
   return best;
 }
 
-// Decode the text from a picture whose corners (tl, tr, br, bl) are roughly known. Returns
-// { text | null, corners }.
-export function read(img, corners, { refineCorners = true, onStep } = {}) {
-  const c = refineCorners ? refine(img, corners, onStep) : corners;
-  const soft = softBits(img, c).slice(0, (MSG_BITS + K - 1) * RATE);
+function decodeAt(img, corners) {
+  const soft = softBits(img, corners).slice(0, (MSG_BITS + K - 1) * RATE);
   const sorted = Array.from(soft, Math.abs).sort((a, b) => a - b);
   const med = sorted[sorted.length >> 1] || 1;
-  const norm = Array.from(soft, v => Math.max(-3, Math.min(3, v / med)));
-  const text = unframe(convDecode(norm, MSG_BITS));
-  return { text, corners: c };
+  return unframe(convDecode(Array.from(soft, v => Math.max(-3, Math.min(3, v / med))), MSG_BITS));
+}
+
+// Decode the text from a picture whose corners (tl, tr, br, bl) are roughly known. Tries the cheap way first
+// and only works harder when the checksum says it failed: as given (a received file needs no alignment), then
+// after a fast half-resolution alignment, then after a precise full-resolution one. Returns { text | null,
+// corners, stage }.
+export function read(img, corners, { onStep } = {}) {
+  let c = corners, text = decodeAt(img, c);
+  if (text !== null) return { text, corners: c, stage: 0 };
+  c = refine(img, c, { onStep });
+  text = decodeAt(img, c);
+  if (text !== null) return { text, corners: c, stage: 1 };
+  c = refine(img, c, { steps: [4, 2, 1], full: true, onStep });
+  return { text: decodeAt(img, c), corners: c, stage: 2 };
 }
