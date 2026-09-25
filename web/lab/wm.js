@@ -226,10 +226,23 @@ function squareToQuad(q) {
   return [x1 - x0 + g * x1, x3 - x0 + h * x3, x0, y1 - y0 + g * y1, y3 - y0 + h * y3, y0, g, h];
 }
 
+// The picture's Cb plane, computed once per image (reading scores hundreds of corner guesses).
+const cbCache = new WeakMap();
+function cbPlane(img) {
+  let cb = cbCache.get(img);
+  if (!cb) {
+    const px = img.data, n = img.width * img.height;
+    cb = new Float32Array(n);
+    for (let i = 0; i < n; i++) cb[i] = cbOf(px[4 * i], px[4 * i + 1], px[4 * i + 2]);
+    cbCache.set(img, cb);
+  }
+  return cb;
+}
+
 // Sample the picture inside `corners` onto an N x N square and return its Cb plane.
 function rectifyCb(img, corners, N) {
   const [a, b, c, d, e, f, g, h] = squareToQuad(corners);
-  const { width: W, height: H, data: px } = img, out = new Float32Array(N * N);
+  const W = img.width, H = img.height, src = cbPlane(img), out = new Float32Array(N * N);
   for (let v = 0; v < N; v++) {
     const t = (v + 0.5) / N;
     for (let u = 0; u < N; u++) {
@@ -237,9 +250,8 @@ function rectifyCb(img, corners, N) {
       const x = (a * s + b * t + c) / z - 0.5, y = (d * s + e * t + f) / z - 0.5;
       const x0 = Math.max(0, Math.min(W - 2, Math.floor(x))), y0 = Math.max(0, Math.min(H - 2, Math.floor(y)));
       const fx = Math.min(1, Math.max(0, x - x0)), fy = Math.min(1, Math.max(0, y - y0));
-      const i00 = 4 * (y0 * W + x0), i10 = i00 + 4, i01 = i00 + 4 * W, i11 = i01 + 4;
-      const sample = k => (px[i00 + k] * (1 - fx) + px[i10 + k] * fx) * (1 - fy) + (px[i01 + k] * (1 - fx) + px[i11 + k] * fx) * fy;
-      out[v * N + u] = cbOf(sample(0), sample(1), sample(2));
+      const i = y0 * W + x0;
+      out[v * N + u] = (src[i] * (1 - fx) + src[i + 1] * fx) * (1 - fy) + (src[i + W] * (1 - fx) + src[i + W + 1] * fx) * fy;
     }
   }
   return out;
