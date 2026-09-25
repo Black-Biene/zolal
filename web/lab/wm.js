@@ -317,6 +317,76 @@ function decodeAt(img, corners) {
   return { text: unframe(bits), match: agree / code.length };
 }
 
+// ---- snapping rough corners to the picture's edges -----------------------------------------------------
+
+// Luminance plane, lightly blurred, cached per image.
+const lumaCache = new WeakMap();
+function lumaPlane(img) {
+  let y = lumaCache.get(img);
+  if (!y) {
+    const px = img.data, n = img.width * img.height;
+    y = new Float32Array(n);
+    for (let i = 0; i < n; i++) y[i] = lumaOf(px[4 * i], px[4 * i + 1], px[4 * i + 2]);
+    y = blur(y, img.width, img.height, 1.5);
+    lumaCache.set(img, y);
+  }
+  return y;
+}
+
+function sample(plane, W, H, x, y) {
+  if (x < 0 || y < 0 || x >= W - 1 || y >= H - 1) return NaN;
+  const x0 = x | 0, y0 = y | 0, fx = x - x0, fy = y - y0, i = y0 * W + x0;
+  return (plane[i] * (1 - fx) + plane[i + 1] * fx) * (1 - fy) + (plane[i + W] * (1 - fx) + plane[i + W + 1] * fx) * fy;
+}
+
+// How strongly a straight edge runs from p to q: mean |brightness step| across the line, sampled away from
+// the ends (corners may be rounded or cut off).
+function edgeScore(Y, W, H, p, q, n) {
+  let sum = 0, cnt = 0;
+  for (let k = 0; k < 64; k++) {
+    const t = 0.1 + 0.8 * k / 63, x = p[0] + (q[0] - p[0]) * t, y = p[1] + (q[1] - p[1]) * t;
+    const d = sample(Y, W, H, x + 2 * n[0], y + 2 * n[1]) - sample(Y, W, H, x - 2 * n[0], y - 2 * n[1]);
+    if (!Number.isNaN(d)) { sum += Math.abs(d); cnt++; }
+  }
+  return cnt > 32 ? sum / cnt : 0;
+}
+
+function intersect([p1, q1], [p2, q2]) {
+  const d1 = [q1[0] - p1[0], q1[1] - p1[1]], d2 = [q2[0] - p2[0], q2[1] - p2[1]];
+  const den = d1[0] * d2[1] - d1[1] * d2[0];
+  if (Math.abs(den) < 1e-9) return null;
+  const t = ((p2[0] - p1[0]) * d2[1] - (p2[1] - p1[1]) * d2[0]) / den;
+  return [p1[0] + t * d1[0], p1[1] + t * d1[1]];
+}
+
+// Move roughly placed corners onto the picture's real edges: for each side, try shifting both of its ends
+// sideways (up to 6% of the shot's size) and keep the straightest, strongest edge; the corners are where the
+// four fitted sides meet. Returns the input unchanged if the fit looks wrong.
+export function snapToEdges(img, corners) {
+  const { width: W, height: H } = img, Y = lumaPlane(img), R = Math.round(0.06 * Math.max(W, H));
+  const sides = [];
+  for (let k = 0; k < 4; k++) {
+    const p = corners[k], q = corners[(k + 1) % 4];
+    const len = Math.hypot(q[0] - p[0], q[1] - p[1]) || 1;
+    const n = [-(q[1] - p[1]) / len, (q[0] - p[0]) / len];
+    const at = (a, b) => [[p[0] + a * n[0], p[1] + a * n[1]], [q[0] + b * n[0], q[1] + b * n[1]]];
+    let best = [0, 0], bestScore = -1;
+    for (const [step, lo, hi] of [[4, -R, R], [1, -4, 4]]) {
+      const [ca, cb] = best;
+      for (let a = (step === 4 ? lo : ca + lo); a <= (step === 4 ? hi : ca + hi); a += step)
+        for (let b = (step === 4 ? lo : cb + lo); b <= (step === 4 ? hi : cb + hi); b += step) {
+          const [pp, qq] = at(a, b), sc = edgeScore(Y, W, H, pp, qq, n);
+          if (sc > bestScore) { bestScore = sc; best = [a, b]; }
+        }
+    }
+    sides.push(at(...best));
+  }
+  const out = [intersect(sides[3], sides[0]), intersect(sides[0], sides[1]),
+               intersect(sides[1], sides[2]), intersect(sides[2], sides[3])];
+  const ok = out.every((c, i) => c && Math.hypot(c[0] - corners[i][0], c[1] - corners[i][1]) < 2 * R);
+  return ok ? out : corners;
+}
+
 // Decode the text from a picture whose corners (tl, tr, br, bl) are roughly known. Tries the cheap way first
 // and only works harder when the checksum says it failed: as given (a received file needs no alignment), then
 // after a fast half-resolution alignment, then after a precise full-resolution one. Returns { text | null,
@@ -324,9 +394,13 @@ function decodeAt(img, corners) {
 export function read(img, corners, { onStep } = {}) {
   let c = corners, r = decodeAt(img, c);
   if (r.text !== null) return { ...r, corners: c, stage: 0 };
-  c = refine(img, c, { onStep });
+  // hand-placed corners on a phone are tens of pixels off: snap them to the picture's edges first
+  c = snapToEdges(img, c);
   r = decodeAt(img, c);
   if (r.text !== null) return { ...r, corners: c, stage: 1 };
+  c = refine(img, c, { onStep });
+  r = decodeAt(img, c);
+  if (r.text !== null) return { ...r, corners: c, stage: 2 };
   c = refine(img, c, { steps: [4, 2, 1], full: true, onStep });
-  return { ...decodeAt(img, c), corners: c, stage: 2 };
+  return { ...decodeAt(img, c), corners: c, stage: 3 };
 }
