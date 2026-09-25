@@ -13,7 +13,7 @@ use super::manifest::{mime_for, numbered_name, MAX_MANIFEST_LEN};
 use super::{Entry, Manifest};
 use crate::error::{Result, ZolalError};
 
-/// Buffer for writing extracted files. Big enough to keep syscalls rare, small enough for iOS.
+/// Buffer for writing extracted files. Big enough to keep syscalls rare, small enough for phones.
 const WRITE_BUF: usize = 256 * 1024;
 
 /// Build the manifest for `paths` without reading file contents.

@@ -1,8 +1,7 @@
 //! Progress reporting and cooperative cancellation.
 //!
-//! The core is **synchronous by design** — no async runtime. Swift calls it off the main thread
-//! and marshals updates back to the UI, which keeps the FFI surface simple and avoids shipping
-//! a second scheduler inside the app.
+//! The core is **synchronous by design** — no async runtime. A front end calls it off its UI
+//! thread and marshals updates back, which keeps the API simple and avoids shipping a scheduler.
 
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 

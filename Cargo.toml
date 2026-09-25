@@ -2,7 +2,6 @@
 resolver = "2"
 members = [
     "crates/zolal-core",
-    "crates/zolal-ffi",
     "crates/zolal-cli",
 ]
 
@@ -53,10 +52,6 @@ thiserror = "2"
 opt-level = 3
 lto = true
 codegen-units = 1
-# Unwind rather than abort: `zolal-ffi` wraps every entry point in `catch_unwind`, so a panic
-# on a malformed file surfaces to Swift as an error instead of killing the app. Aborting would
-# make that impossible, and a crash report is a poor way to tell a user their photo is corrupt.
-panic = "unwind"
 strip = true
 
 # Keep debug builds usable for large-file work.

@@ -51,13 +51,13 @@ const FREE: &[u8; 4] = b"free";
 const SKIP: &[u8; 4] = b"skip";
 
 /// HEIF-family major brands (HEIC stills and sequences). ISOBMFF too, but never a carrier:
-/// the Swift side converts them to JPEG first.
+/// the front end converts them to JPEG first.
 pub const HEIF_BRANDS: &[&[u8; 4]] = &[
     b"heic", b"heix", b"hevc", b"heim", b"heis", b"mif1", b"msf1",
 ];
 /// AVIF brands. Also ISOBMFF, also an image.
 pub const AVIF_BRANDS: &[&[u8; 4]] = &[b"avif", b"avis"];
-/// QuickTime's major brand. The Swift side remuxes MOV to MP4 first.
+/// QuickTime's major brand. The front end relabels MOV as MP4 first.
 pub const QUICKTIME_BRAND: &[u8; 4] = b"qt  ";
 
 /// MP4 carrier implementation.
@@ -67,7 +67,7 @@ impl Carrier for Mp4Carrier {
     fn probe(head: &[u8]) -> bool {
         // ISOBMFF starts with a `ftyp` box; the size field precedes the type. HEIC, AVIF and
         // MOV share that shape, so the major brand has to rule them out, or a HEIC reaching us
-        // would be reported as "MP4" instead of as the Swift-side bug it is.
+        // would be reported as "MP4" instead of as the front-end bug it is.
         // `get` + `as_slice` avoids both a panic on short input and slice/array comparison
         // ambiguity.
         if head.get(4..8) != Some(b"ftyp".as_slice()) {

@@ -63,10 +63,10 @@ pub enum ZolalError {
     #[error("the hidden data is damaged or incomplete")]
     DamagedPayload,
 
-    /// The file is not a JPEG, MP4 or PDF.
+    /// The file is not a JPEG, MP4, PDF or MP3.
     ///
-    /// HEIC and MOV should have been normalised before reaching this crate; if they arrive here
-    /// it is a bug in the Swift layer, so name the detected type to make that obvious.
+    /// HEIC and MOV should have been converted before reaching this crate; if they arrive here
+    /// the front end skipped that, so name the detected type to make that obvious.
     #[error("unsupported carrier format: {detected}")]
     UnsupportedFormat {
         /// Human-readable detected type, e.g. `"HEIC"` or `"unknown"`.

@@ -16,9 +16,8 @@
 //!
 //! ## Design invariants
 //!
-//! 1. **No iOS/Apple dependencies.** Codecs live on the Swift side (ImageIO/AVFoundation);
-//!    this crate only ever sees already-normalised bytes. HEIC→JPEG and MOV→MP4 happen
-//!    before we are called.
+//! 1. **No platform dependencies.** Codecs live in the front end (the web page decodes HEIC
+//!    and relabels MOV); this crate only ever sees JPEG, MP4, PDF or MP3 bytes.
 //! 2. **Streaming everywhere.** The API takes paths, never byte arrays: a 4 GB video must
 //!    not be materialised in RAM. Memory does not grow with file size: streaming holds one
 //!    64 KiB chunk plus 256 KiB I/O buffers, and the largest allocation is Argon2id's working

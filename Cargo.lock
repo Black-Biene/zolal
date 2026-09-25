@@ -944,12 +944,3 @@ dependencies = [
  "thiserror 2.0.20",
  "zeroize",
 ]
-
-[[package]]
-name = "zolal-ffi"
-version = "0.1.0"
-dependencies = [
- "secrecy",
- "tempfile",
- "zolal-core",
-]
