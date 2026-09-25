@@ -10,13 +10,22 @@
 .viewfinder { position: relative; border-radius: 12px; overflow: hidden; background: #000; margin-bottom: 8px }
 .viewfinder video { display: block; width: 100%; height: auto }
 .guide { position: absolute; inset: 12% 10%; border: 2px dashed rgb(255 255 255 / .85); border-radius: 6px; box-shadow: 0 0 0 999px rgb(0 0 0 / .25) }
-.editor { position: relative; margin: 22px 16px 26px; touch-action: none; user-select: none }
+.editor { position: relative; margin: 8px 0 14px; touch-action: none; user-select: none }
 .editor canvas { display: block; width: 100%; height: auto; border-radius: 10px }
-.dot {
-  position: absolute; width: 30px; height: 30px; margin: -15px 0 0 -15px; border-radius: 50%;
-  background: rgb(10 79 140 / .35); border: 2px solid #fff; box-shadow: 0 0 0 2px var(--accent); cursor: grab; touch-action: none;
+.crop {
+  position: absolute; border: 2px solid #fff; outline: 2px solid var(--accent); cursor: move; touch-action: none;
+  box-shadow: 0 0 0 9999px rgb(0 0 0 / .35);
 }
-.dot::after { content: ""; position: absolute; left: 50%; top: 50%; width: 4px; height: 4px; margin: -2px; border-radius: 50%; background: #fff }
+.editor { overflow: hidden; border-radius: 10px }
+.grip {
+  position: absolute; width: 28px; height: 28px; border: 4px solid #fff; touch-action: none;
+  filter: drop-shadow(0 0 1px var(--accent));
+}
+.grip[data-g="tl"] { left: -6px; top: -6px; border-right: 0; border-bottom: 0; cursor: nwse-resize }
+.grip[data-g="tr"] { right: -6px; top: -6px; border-left: 0; border-bottom: 0; cursor: nesw-resize }
+.grip[data-g="br"] { right: -6px; bottom: -6px; border-left: 0; border-top: 0; cursor: nwse-resize }
+.grip[data-g="bl"] { left: -6px; bottom: -6px; border-right: 0; border-top: 0; cursor: nesw-resize }
+.quad { position: absolute; inset: 0; pointer-events: none }
 .fullscreen { position: fixed; inset: 0; z-index: 10; background: #000; display: grid; place-items: center }
 .fullscreen canvas { max-width: 100vw; max-height: 100vh; width: auto; height: auto }
 .fullscreen[hidden] { display: none }

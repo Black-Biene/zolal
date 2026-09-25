@@ -1,13 +1,13 @@
 // Camera-readable hidden text, lab version: a JavaScript port of research/camera-watermark.
 //
-// The mark lives in the blue-yellow chroma (Cb) of the photo. A 1024x1024 grid of 10 px cells is stretched
-// over the picture whatever its shape; each of 1024 coded bits owns ~10 scattered cells with a +1/-1 chip.
-// Reading rectifies the picture from its four corners back onto that square grid, so the reader never needs
-// to know the photo's aspect ratio.
+// The mark lives in the blue-yellow chroma (Cb) of the photo, on a grid of ~10,400 cells of 10 px. The grid's
+// shape follows the photo's (snapped to one of a few standard ratios) so cells stay square on wide or tall
+// pictures; each of 1024 coded bits owns ~10 scattered cells with a +1/-1 chip. Reading rectifies the picture
+// from its four corners, estimates the ratio from them, and tries the nearest standard ratios.
 //
 // Lab only: the layout key is fixed and the text isn't encrypted yet.
 
-export const GRID = 1024, CELL = 10, RAW = 1024, RATE = 3;
+export const CELL = 10, RAW = 1024, RATE = 3;
 export const MSG_BYTES = 41, MSG_BITS = MSG_BYTES * 8, TEXT_BYTES = MSG_BYTES - 3; // length byte + CRC-16
 const STRENGTH = 4, KEY = 1;
 
@@ -22,15 +22,30 @@ function mulberry32(seed) {
   };
 }
 
-const G = Math.floor(GRID / CELL); // cells per side
-const LAYOUT = (() => {
-  const n = G * G, rand = mulberry32(KEY);
-  const chips = new Int8Array(n), owner = new Int32Array(n), perm = new Int32Array(n);
-  for (let i = 0; i < n; i++) { chips[i] = rand() < 0.5 ? -1 : 1; perm[i] = i; }
-  for (let i = n - 1; i > 0; i--) { const j = Math.floor(rand() * (i + 1)); [perm[i], perm[j]] = [perm[j], perm[i]]; }
-  for (let i = 0; i < n; i++) owner[perm[i]] = i % RAW;
-  return { chips, owner };
-})();
+// Standard width:height ratios. A photo uses the nearest one (in log scale), which keeps its cells within
+// ~12% of square.
+const RATIOS = [1 / 3, 2 / 5, 1 / 2, 9 / 16, 2 / 3, 3 / 4, 1, 4 / 3, 3 / 2, 16 / 9, 2, 5 / 2, 3];
+const CELLS = 102 * 102;
+
+const layouts = new Map();
+function layout(r) {
+  let L = layouts.get(r);
+  if (!L) {
+    const ratio = RATIOS[r], gw = Math.round(Math.sqrt(CELLS * ratio)), gh = Math.round(CELLS / gw);
+    const n = gw * gh, rand = mulberry32(KEY * 131 + r);
+    const chips = new Int8Array(n), owner = new Int32Array(n), perm = new Int32Array(n);
+    for (let i = 0; i < n; i++) { chips[i] = rand() < 0.5 ? -1 : 1; perm[i] = i; }
+    for (let i = n - 1; i > 0; i--) { const j = Math.floor(rand() * (i + 1)); [perm[i], perm[j]] = [perm[j], perm[i]]; }
+    for (let i = 0; i < n; i++) owner[perm[i]] = i % RAW;
+    L = { gw, gh, chips, owner };
+    layouts.set(r, L);
+  }
+  return L;
+}
+
+// Standard ratios nearest to `ratio`, closest first.
+const nearestRatios = (ratio, k) => RATIOS.map((q, i) => [Math.abs(Math.log(q / ratio)), i])
+  .sort((a, b) => a[0] - b[0]).slice(0, k).map(([, i]) => i);
 
 // ---- image helpers ----------------------------------------------------------------------------------
 
@@ -186,9 +201,10 @@ export function embed(source, text) {
 
   const coded = convEncode(frame(text));
   const bits = new Int8Array(RAW); bits.set(coded);
-  const grid = new Float32Array(G * G);
-  for (let i = 0; i < G * G; i++) grid[i] = LAYOUT.chips[i] * (bits[LAYOUT.owner[i]] ? 1 : -1);
-  const up = blur(upsampleCubic(grid, G, G, CELL), G * CELL, G * CELL, CELL / 6);
+  const L = layout(nearestRatios(W / H, 1)[0]), PW = L.gw * CELL, PH = L.gh * CELL;
+  const grid = new Float32Array(L.gw * L.gh);
+  for (let i = 0; i < grid.length; i++) grid[i] = L.chips[i] * (bits[L.owner[i]] ? 1 : -1);
+  const up = blur(upsampleCubic(grid, L.gw, L.gh, CELL), PW, PH, CELL / 6);
   let peak = 0; for (const v of up) peak = Math.max(peak, Math.abs(v));
 
   // texture mask from luminance: flat areas get half strength
@@ -198,13 +214,12 @@ export function embed(source, text) {
   for (let i = 0; i < W * H; i++) act[i] = Math.abs(Y[i] - lo[i]);
   const actS = blur(act, W, H, 6);
 
-  const span = G * CELL; // pattern covers GRID px minus the leftover edge
   for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
-    // bilinear sample of the square pattern stretched over the photo
-    const gx = (x + 0.5) * GRID / W - 0.5, gy = (y + 0.5) * GRID / H - 0.5;
-    if (gx < 0 || gy < 0 || gx >= span - 1 || gy >= span - 1) continue;
-    const x0 = gx | 0, y0 = gy | 0, fx = gx - x0, fy = gy - y0, o = y0 * span + x0;
-    const f = (up[o] * (1 - fx) + up[o + 1] * fx) * (1 - fy) + (up[o + span] * (1 - fx) + up[o + span + 1] * fx) * fy;
+    // bilinear sample of the pattern stretched over the photo
+    const gx = (x + 0.5) * PW / W - 0.5, gy = (y + 0.5) * PH / H - 0.5;
+    if (gx < 0 || gy < 0 || gx >= PW - 1 || gy >= PH - 1) continue;
+    const x0 = gx | 0, y0 = gy | 0, fx = gx - x0, fy = gy - y0, o = y0 * PW + x0;
+    const f = (up[o] * (1 - fx) + up[o + 1] * fx) * (1 - fy) + (up[o + PW] * (1 - fx) + up[o + PW + 1] * fx) * fy;
     const i = y * W + x, m = 0.5 + 0.5 * Math.min(1, actS[i] / 10);
     const d = STRENGTH * m * (f / peak) * 2; // change in Cb
     px[4 * i + 2] = Math.max(0, Math.min(255, Math.round(px[4 * i + 2] + 1.773 * d)));
@@ -239,19 +254,19 @@ function cbPlane(img) {
   return cb;
 }
 
-// Sample the picture inside `corners` onto an N x N square and return its Cb plane.
-function rectifyCb(img, corners, N) {
+// Sample the picture inside `corners` onto an NW x NH rectangle and return its Cb plane.
+function rectifyCb(img, corners, NW, NH) {
   const [a, b, c, d, e, f, g, h] = squareToQuad(corners);
-  const W = img.width, H = img.height, src = cbPlane(img), out = new Float32Array(N * N);
-  for (let v = 0; v < N; v++) {
-    const t = (v + 0.5) / N;
-    for (let u = 0; u < N; u++) {
-      const s = (u + 0.5) / N, z = g * s + h * t + 1;
+  const W = img.width, H = img.height, src = cbPlane(img), out = new Float32Array(NW * NH);
+  for (let v = 0; v < NH; v++) {
+    const t = (v + 0.5) / NH;
+    for (let u = 0; u < NW; u++) {
+      const s = (u + 0.5) / NW, z = g * s + h * t + 1;
       const x = (a * s + b * t + c) / z - 0.5, y = (d * s + e * t + f) / z - 0.5;
       const x0 = Math.max(0, Math.min(W - 2, Math.floor(x))), y0 = Math.max(0, Math.min(H - 2, Math.floor(y)));
       const fx = Math.min(1, Math.max(0, x - x0)), fy = Math.min(1, Math.max(0, y - y0));
       const i = y0 * W + x0;
-      out[v * N + u] = (src[i] * (1 - fx) + src[i + 1] * fx) * (1 - fy) + (src[i + W] * (1 - fx) + src[i + W + 1] * fx) * fy;
+      out[v * NW + u] = (src[i] * (1 - fx) + src[i + 1] * fx) * (1 - fy) + (src[i + W] * (1 - fx) + src[i + W + 1] * fx) * fy;
     }
   }
   return out;
@@ -261,20 +276,20 @@ const hann = n => Array.from({ length: n }, (_, i) => 0.5 - 0.5 * Math.cos(2 * M
 
 // Soft value per raw bit (positive means 1). `f` = 2 reads at half resolution: 4x faster, a little
 // noisier, which is enough to judge alignment during the coarse steps.
-export function softBits(img, corners, f = 1) {
-  const N = GRID / f, cell = CELL / f, win = hann(cell);
-  const cb = rectifyCb(img, corners, N), lo = blur(cb, N, N, cell * 0.9), soft = new Float64Array(RAW);
-  for (let cy = 0; cy < G; cy++) for (let cx = 0; cx < G; cx++) {
+export function softBits(img, corners, r, f = 1) {
+  const L = layout(r), cell = CELL / f, NW = L.gw * cell, NH = L.gh * cell, win = hann(cell);
+  const cb = rectifyCb(img, corners, NW, NH), lo = blur(cb, NW, NH, cell * 0.9), soft = new Float64Array(RAW);
+  for (let cy = 0; cy < L.gh; cy++) for (let cx = 0; cx < L.gw; cx++) {
     let acc = 0;
     for (let j = 0; j < cell; j++) {
-      const row = (cy * cell + j) * N + cx * cell;
+      const row = (cy * cell + j) * NW + cx * cell;
       for (let i = 0; i < cell; i++) {
         const hp = Math.max(-12, Math.min(12, cb[row + i] - lo[row + i]));
         acc += hp * win[i] * win[j];
       }
     }
-    const idx = cy * G + cx;
-    soft[LAYOUT.owner[idx]] += acc * LAYOUT.chips[idx];
+    const idx = cy * L.gw + cx;
+    soft[L.owner[idx]] += acc * L.chips[idx];
   }
   return soft;
 }
@@ -284,16 +299,16 @@ const strength = soft => soft.reduce((s, v) => s + Math.abs(v), 0);
 // Nudge each corner coordinate to where the hidden pattern is strongest, one coordinate at a time.
 // `steps` are in pixels of a 1080p frame; `full` scores at full resolution (precise, ~6x slower) instead of
 // half.
-export function refine(img, corners, { steps = [16, 8, 4, 2, 1], full = false, onStep = () => {} } = {}) {
+export function refine(img, corners, r, { steps = [16, 8, 4, 2, 1], full = false, onStep = () => {} } = {}) {
   const f = full ? 1 : 2, scale = Math.max(img.width, img.height) / 1920;
-  let best = corners.map(p => p.slice()), bestScore = strength(softBits(img, best, f));
+  let best = corners.map(p => p.slice()), bestScore = strength(softBits(img, best, r, f));
   for (const step of steps) {
     for (let round = 0; round < 2; round++) {
       let improved = false;
       for (let i = 0; i < 4; i++) for (let j = 0; j < 2; j++) for (const dir of [-1, 1]) {
         const c = best.map(p => p.slice());
         c[i][j] += dir * step * scale;
-        const sc = strength(softBits(img, c, f));
+        const sc = strength(softBits(img, c, r, f));
         if (sc > bestScore) { best = c; bestScore = sc; improved = true; }
       }
       onStep(step);
@@ -306,8 +321,8 @@ export function refine(img, corners, { steps = [16, 8, 4, 2, 1], full = false, o
 // Decode at these corners. `match` is how many raw bits agree with the best codeword: about 75–78% when there
 // is no pattern at all (the decoder always finds the nearest codeword), about 99% for a clean file. A
 // diagnostic for real-camera tests.
-function decodeAt(img, corners) {
-  const soft = softBits(img, corners).slice(0, (MSG_BITS + K - 1) * RATE);
+function decodeAt(img, corners, r) {
+  const soft = softBits(img, corners, r).slice(0, (MSG_BITS + K - 1) * RATE);
   const sorted = Array.from(soft, Math.abs).sort((a, b) => a - b);
   const med = sorted[sorted.length >> 1] || 1;
   const bits = convDecode(Array.from(soft, v => Math.max(-3, Math.min(3, v / med))), MSG_BITS);
@@ -359,48 +374,91 @@ function intersect([p1, q1], [p2, q2]) {
   return [p1[0] + t * d1[0], p1[1] + t * d1[1]];
 }
 
-// Move roughly placed corners onto the picture's real edges: for each side, try shifting both of its ends
-// sideways (up to 6% of the shot's size) and keep the straightest, strongest edge; the corners are where the
-// four fitted sides meet. Returns the input unchanged if the fit looks wrong.
-export function snapToEdges(img, corners) {
-  const { width: W, height: H } = img, Y = lumaPlane(img), R = Math.round(0.06 * Math.max(W, H));
+// Candidate positions for the picture's real edges near roughly placed corners. For each side, try shifting
+// both of its ends sideways (up to 8% of the shot's size) and keep the `k` strongest straight edges that are
+// clearly apart; a strong edge inside the photo (a horizon, a wall) can outscore the border, so the caller
+// picks among them. Returns, per side, a list of [p, q] lines.
+function edgeCandidates(img, corners, k = 3) {
+  const { width: W, height: H } = img, Y = lumaPlane(img), R = Math.round(0.08 * Math.max(W, H));
   const sides = [];
-  for (let k = 0; k < 4; k++) {
-    const p = corners[k], q = corners[(k + 1) % 4];
+  for (let side = 0; side < 4; side++) {
+    const p = corners[side], q = corners[(side + 1) % 4];
     const len = Math.hypot(q[0] - p[0], q[1] - p[1]) || 1;
     const n = [-(q[1] - p[1]) / len, (q[0] - p[0]) / len];
     const at = (a, b) => [[p[0] + a * n[0], p[1] + a * n[1]], [q[0] + b * n[0], q[1] + b * n[1]]];
-    let best = [0, 0], bestScore = -1;
-    for (const [step, lo, hi] of [[4, -R, R], [1, -4, 4]]) {
-      const [ca, cb] = best;
-      for (let a = (step === 4 ? lo : ca + lo); a <= (step === 4 ? hi : ca + hi); a += step)
-        for (let b = (step === 4 ? lo : cb + lo); b <= (step === 4 ? hi : cb + hi); b += step) {
-          const [pp, qq] = at(a, b), sc = edgeScore(Y, W, H, pp, qq, n);
-          if (sc > bestScore) { bestScore = sc; best = [a, b]; }
-        }
+    const coarse = [];
+    for (let a = -R; a <= R; a += 4) for (let b = -R; b <= R; b += 4) {
+      const [pp, qq] = at(a, b);
+      coarse.push([edgeScore(Y, W, H, pp, qq, n), a, b]);
     }
-    sides.push(at(...best));
+    coarse.sort((x, y) => y[0] - x[0]);
+    const picked = [];
+    for (const [, a, b] of coarse) {
+      if (picked.some(([pa, pb]) => Math.abs(pa - a) < 12 && Math.abs(pb - b) < 12)) continue;
+      // polish to 1 px
+      let best = [a, b], bestScore = -1;
+      for (let da = -4; da <= 4; da++) for (let db = -4; db <= 4; db++) {
+        const [pp, qq] = at(a + da, b + db), sc = edgeScore(Y, W, H, pp, qq, n);
+        if (sc > bestScore) { bestScore = sc; best = [a + da, b + db]; }
+      }
+      picked.push(best);
+      if (picked.length === k) break;
+    }
+    sides.push(picked.map(([a, b]) => at(a, b)));
   }
-  const out = [intersect(sides[3], sides[0]), intersect(sides[0], sides[1]),
-               intersect(sides[1], sides[2]), intersect(sides[2], sides[3])];
-  const ok = out.every((c, i) => c && Math.hypot(c[0] - corners[i][0], c[1] - corners[i][1]) < 2 * R);
-  return ok ? out : corners;
+  return sides;
 }
 
-// Decode the text from a picture whose corners (tl, tr, br, bl) are roughly known. Tries the cheap way first
-// and only works harder when the checksum says it failed: as given (a received file needs no alignment), then
-// after a fast half-resolution alignment, then after a precise full-resolution one. Returns { text | null,
-// corners, stage }.
+const quadFrom = s => [intersect(s[3], s[0]), intersect(s[0], s[1]), intersect(s[1], s[2]), intersect(s[2], s[3])];
+
+// Move roughly placed corners onto the picture's real edges, using the hidden pattern to choose between
+// candidate edges: every combination of each side's strongest candidates is scored by how clearly the pattern
+// shows (at half resolution) and the best wins. Returns { corners, r } or null if nothing plausible was found.
+export function snapToEdges(img, corners) {
+  const cand = edgeCandidates(img, corners);
+  let best = null;
+  for (const s0 of cand[0]) for (const s1 of cand[1]) for (const s2 of cand[2]) for (const s3 of cand[3]) {
+    const q = quadFrom([s0, s1, s2, s3]);
+    if (q.some(c => !c)) continue;
+    for (const r of nearestRatios(ratioOf(q), 2)) {
+      const sc = strength(softBits(img, q, r, 2));
+      if (!best || sc > best.score) best = { corners: q, r, score: sc };
+    }
+  }
+  return best;
+}
+
+// Width:height of the picture from its corners (averaging opposite sides; perspective makes this rough).
+export function ratioOf(c) {
+  const d = (p, q) => Math.hypot(q[0] - p[0], q[1] - p[1]);
+  return (d(c[0], c[1]) + d(c[3], c[2])) / (d(c[0], c[3]) + d(c[1], c[2]));
+}
+
+// Decode the text from a picture whose corners (tl, tr, br, bl) are roughly known. Cheapest first, stopping as
+// soon as the checksum passes: the corners as given, then snapped to the picture's edges, then a fast
+// half-resolution alignment, then a precise full-resolution one. Each stage tries the standard ratios nearest
+// the corners' shape (later stages only the most promising). Returns { text | null, match, corners, stage }.
 export function read(img, corners, { onStep } = {}) {
-  let c = corners, r = decodeAt(img, c);
-  if (r.text !== null) return { ...r, corners: c, stage: 0 };
-  // hand-placed corners on a phone are tens of pixels off: snap them to the picture's edges first
-  c = snapToEdges(img, c);
-  r = decodeAt(img, c);
-  if (r.text !== null) return { ...r, corners: c, stage: 1 };
-  c = refine(img, c, { onStep });
-  r = decodeAt(img, c);
-  if (r.text !== null) return { ...r, corners: c, stage: 2 };
-  c = refine(img, c, { steps: [4, 2, 1], full: true, onStep });
-  return { ...decodeAt(img, c), corners: c, stage: 3 };
+  let best = { text: null, match: 0, corners, stage: 0 };
+  const attempt = (c, r, stage) => {
+    const res = { ...decodeAt(img, c, r), corners: c, stage, r };
+    if (res.text !== null || res.match > best.match) best = res;
+    return res.text !== null;
+  };
+  const cands = nearestRatios(ratioOf(corners), 3);
+  for (const r of cands) if (attempt(corners, r, 0)) return best;
+  // hand-placed corners on a phone are tens of pixels off: snap them to the picture's edges
+  const snap = snapToEdges(img, corners);
+  const snapped = snap ? snap.corners : corners;
+  const cands2 = snap ? [snap.r, ...nearestRatios(ratioOf(snapped), 3).filter(r => r !== snap.r)].slice(0, 3)
+    : nearestRatios(ratioOf(snapped), 3);
+  for (const r of cands2) if (attempt(snapped, r, 1)) return best;
+  const order = [...cands2].sort((a, b) => (best.r === b) - (best.r === a));
+  for (const r of order.slice(0, 2)) {
+    const c = refine(img, snapped, r, { onStep });
+    if (attempt(c, r, 2)) return best;
+  }
+  const r = best.r ?? cands2[0];
+  attempt(refine(img, best.corners, r, { steps: [4, 2, 1], full: true, onStep }), r, 3);
+  return best;
 }

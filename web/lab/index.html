@@ -68,18 +68,21 @@
       <button id="capture" class="primary">Capture</button>
     </div>
     <div id="corners" hidden>
-      <p class="hint">Drag the four dots onto the picture's corners. Close is enough.</p>
+      <p class="hint">Move and resize the box so it frames the picture. Roughly is enough: the page finds the
+      exact edges.</p>
       <div class="editor" id="editor">
         <canvas id="shot"></canvas>
-        <span class="dot" data-i="0"></span><span class="dot" data-i="1"></span>
-        <span class="dot" data-i="2"></span><span class="dot" data-i="3"></span>
+        <div class="crop" id="crop">
+          <span class="grip" data-g="tl"></span><span class="grip" data-g="tr"></span>
+          <span class="grip" data-g="br"></span><span class="grip" data-g="bl"></span>
+        </div>
       </div>
       <div id="read-status" class="status" role="status" aria-live="polite"></div>
       <button id="read" class="primary">Read hidden text</button>
       <p class="actions-row"><button id="save-shot" class="again" hidden>Save this shot (for analysis)</button></p>
     </div>
     <p class="hint"><strong>Tip:</strong> for the sharpest shot, take the photo with the phone's own camera app
-    (fill the screen with the picture, hold still), then use <em>Choose image</em> and place the dots.</p>
+    (fill the screen with the picture, hold still), then use <em>Choose image</em> and frame it with the box.</p>
   </section>
 </main>
 
