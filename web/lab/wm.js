@@ -375,11 +375,11 @@ function intersect([p1, q1], [p2, q2]) {
 }
 
 // Candidate positions for the picture's real edges near roughly placed corners. For each side, try shifting
-// both of its ends sideways (up to 8% of the shot's size) and keep the `k` strongest straight edges that are
+// both of its ends sideways (up to 12% of the shot's size) and keep the `k` strongest straight edges that are
 // clearly apart; a strong edge inside the photo (a horizon, a wall) can outscore the border, so the caller
 // picks among them. Returns, per side, a list of [p, q] lines.
 function edgeCandidates(img, corners, k = 3) {
-  const { width: W, height: H } = img, Y = lumaPlane(img), R = Math.round(0.08 * Math.max(W, H));
+  const { width: W, height: H } = img, Y = lumaPlane(img), R = Math.round(0.12 * Math.max(W, H));
   const sides = [];
   for (let side = 0; side < 4; side++) {
     const p = corners[side], q = corners[(side + 1) % 4];
