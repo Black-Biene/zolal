@@ -321,8 +321,8 @@ export function refine(img, corners, r, { steps = [16, 8, 4, 2, 1], full = false
 // Decode at these corners. `match` is how many raw bits agree with the best codeword: about 75–78% when there
 // is no pattern at all (the decoder always finds the nearest codeword), about 99% for a clean file. A
 // diagnostic for real-camera tests.
-function decodeAt(img, corners, r) {
-  const soft = softBits(img, corners, r).slice(0, (MSG_BITS + K - 1) * RATE);
+export function decodeAt(img, corners, r, f = 1) {
+  const soft = softBits(img, corners, r, f).slice(0, (MSG_BITS + K - 1) * RATE);
   const sorted = Array.from(soft, Math.abs).sort((a, b) => a - b);
   const med = sorted[sorted.length >> 1] || 1;
   const bits = convDecode(Array.from(soft, v => Math.max(-3, Math.min(3, v / med))), MSG_BITS);
@@ -354,16 +354,34 @@ function sample(plane, W, H, x, y) {
   return (plane[i] * (1 - fx) + plane[i + 1] * fx) * (1 - fy) + (plane[i + W] * (1 - fx) + plane[i + W + 1] * fx) * fy;
 }
 
-// How strongly a straight edge runs from p to q: mean |brightness step| across the line, sampled away from
-// the ends (corners may be rounded or cut off).
-function edgeScore(Y, W, H, p, q, n) {
+// Fine colour texture (high-passed Cb, magnitude, smoothed), cached per image. The hidden pattern puts this
+// texture over the whole picture, dark parts included, so its boundary marks the picture's edge even where
+// the picture's brightness blends into the background.
+const textureCache = new WeakMap();
+function texturePlane(img) {
+  let t = textureCache.get(img);
+  if (!t) {
+    const W = img.width, H = img.height, cb = cbPlane(img), lo = blur(cb, W, H, 2), e = new Float32Array(W * H);
+    for (let i = 0; i < e.length; i++) e[i] = Math.abs(cb[i] - lo[i]);
+    t = blur(e, W, H, 3);
+    textureCache.set(img, t);
+  }
+  return t;
+}
+
+// How strongly a straight edge runs from p to q, sampled away from the ends (corners may be rounded or cut
+// off): the mean brightness step across the line, plus the step in colour texture (weighted to a similar
+// scale), so either kind of boundary counts.
+function edgeScore(Y, T, W, H, p, q, n) {
   let sum = 0, cnt = 0;
   for (let k = 0; k < 64; k++) {
     const t = 0.1 + 0.8 * k / 63, x = p[0] + (q[0] - p[0]) * t, y = p[1] + (q[1] - p[1]) * t;
     const d = sample(Y, W, H, x + 2 * n[0], y + 2 * n[1]) - sample(Y, W, H, x - 2 * n[0], y - 2 * n[1]);
-    if (!Number.isNaN(d)) { sum += Math.abs(d); cnt++; }
+    const e = sample(T, W, H, x + 6 * n[0], y + 6 * n[1]) - sample(T, W, H, x - 6 * n[0], y - 6 * n[1]);
+    // near the shot's border only the brightness step may be measurable
+    if (!Number.isNaN(d)) { sum += Math.abs(d) + (Number.isNaN(e) ? 0 : 8 * Math.abs(e)); cnt++; }
   }
-  return cnt > 32 ? sum / cnt : 0;
+  return cnt >= 16 ? sum / cnt : 0;
 }
 
 function intersect([p1, q1], [p2, q2]) {
@@ -378,8 +396,9 @@ function intersect([p1, q1], [p2, q2]) {
 // both of its ends sideways (up to 12% of the shot's size) and keep the `k` strongest straight edges that are
 // clearly apart; a strong edge inside the photo (a horizon, a wall) can outscore the border, so the caller
 // picks among them. Returns, per side, a list of [p, q] lines.
-function edgeCandidates(img, corners, k = 3) {
-  const { width: W, height: H } = img, Y = lumaPlane(img), R = Math.round(0.12 * Math.max(W, H));
+export function edgeCandidates(img, corners, k = 3) {
+  const { width: W, height: H } = img, Y = lumaPlane(img), T = texturePlane(img);
+  const R = Math.round(0.12 * Math.max(W, H));
   const sides = [];
   for (let side = 0; side < 4; side++) {
     const p = corners[side], q = corners[(side + 1) % 4];
@@ -389,31 +408,41 @@ function edgeCandidates(img, corners, k = 3) {
     const coarse = [];
     for (let a = -R; a <= R; a += 4) for (let b = -R; b <= R; b += 4) {
       const [pp, qq] = at(a, b);
-      coarse.push([edgeScore(Y, W, H, pp, qq, n), a, b]);
+      coarse.push([edgeScore(Y, T, W, H, pp, qq, n), a, b]);
     }
     coarse.sort((x, y) => y[0] - x[0]);
-    const picked = [];
+    // candidates must be genuinely different edges, not the same one shifted a few pixels
+    const apart = Math.max(24, 0.025 * Math.max(W, H)), picked = [];
     for (const [, a, b] of coarse) {
-      if (picked.some(([pa, pb]) => Math.abs(pa - a) < 12 && Math.abs(pb - b) < 12)) continue;
+      if (picked.some(([pa, pb]) => Math.max(Math.abs(pa - a), Math.abs(pb - b)) < apart)) continue;
       // polish to 1 px
       let best = [a, b], bestScore = -1;
       for (let da = -4; da <= 4; da++) for (let db = -4; db <= 4; db++) {
-        const [pp, qq] = at(a + da, b + db), sc = edgeScore(Y, W, H, pp, qq, n);
+        const [pp, qq] = at(a + da, b + db), sc = edgeScore(Y, T, W, H, pp, qq, n);
         if (sc > bestScore) { bestScore = sc; best = [a + da, b + db]; }
       }
       picked.push(best);
       if (picked.length === k) break;
     }
-    sides.push(picked.map(([a, b]) => at(a, b)));
+    const lines = picked.map(([a, b]) => at(a, b));
+    // a box side at the shot's border may mean the picture runs past the shot: offer that border as an edge
+    const m = 0.02 * Math.max(W, H), border =
+      side === 0 && p[1] < m && q[1] < m ? [[p[0], 0], [q[0], 0]] :
+      side === 1 && p[0] > W - m && q[0] > W - m ? [[W - 1, p[1]], [W - 1, q[1]]] :
+      side === 2 && p[1] > H - m && q[1] > H - m ? [[p[0], H - 1], [q[0], H - 1]] :
+      side === 3 && p[0] < m && q[0] < m ? [[0, p[1]], [0, q[1]]] : null;
+    if (border) lines.push(border);
+    sides.push(lines);
   }
   return sides;
 }
 
 const quadFrom = s => [intersect(s[3], s[0]), intersect(s[0], s[1]), intersect(s[1], s[2]), intersect(s[2], s[3])];
 
-// Move roughly placed corners onto the picture's real edges, using the hidden pattern to choose between
-// candidate edges: every combination of each side's strongest candidates is scored by how clearly the pattern
-// shows (at half resolution) and the best wins. Returns { corners, r } or null if nothing plausible was found.
+// Move roughly placed corners onto the picture's real edges, using the hidden message to choose between
+// candidate edges: every combination of each side's strongest candidates is decoded (at half resolution) and
+// the one whose raw bits best match a valid codeword wins; a combination whose checksum passes wins at once.
+// Returns { corners, r, match, text } or null if nothing plausible was found.
 export function snapToEdges(img, corners) {
   const cand = edgeCandidates(img, corners);
   let best = null;
@@ -421,8 +450,9 @@ export function snapToEdges(img, corners) {
     const q = quadFrom([s0, s1, s2, s3]);
     if (q.some(c => !c)) continue;
     for (const r of nearestRatios(ratioOf(q), 2)) {
-      const sc = strength(softBits(img, q, r, 2));
-      if (!best || sc > best.score) best = { corners: q, r, score: sc };
+      const res = decodeAt(img, q, r, 2);
+      if (!best || res.match > best.match) best = { corners: q, r, ...res };
+      if (res.text !== null) return best;
     }
   }
   return best;

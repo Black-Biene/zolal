@@ -39,7 +39,7 @@ def ch_telegram_harsh(img, r):
     return jpeg(img, 70), None
 
 
-def camera(img, r, blur, noise, frac, jitter, contrast=(0.8, 1.0)):
+def camera(img, r, blur, noise, frac, jitter, contrast=(0.8, 1.0), bg=(20, 80)):
     """Photograph `img` shown on a screen / paper with a phone. Returns frame and true corners."""
     FW, FH = 1920, 1080
     h, w = img.shape[:2]
@@ -54,7 +54,7 @@ def camera(img, r, blur, noise, frac, jitter, contrast=(0.8, 1.0)):
     corners = base + r.uniform(-jitter, jitter, (4, 2)).astype(np.float32) * np.float32([pw, ph])
     src = np.float32([[0, 0], [w - 1, 0], [w - 1, h - 1], [0, h - 1]])
     M = cv2.getPerspectiveTransform(src, corners)
-    bg = np.full((FH, FW, 3), r.uniform(20, 80), np.float32)
+    bg = np.full((FH, FW, 3), r.uniform(*bg), np.float32)
     frame = cv2.warpPerspective(img.astype(np.float32), M, (FW, FH), dst=bg,
                                 flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_TRANSPARENT)
     f = frame / 255.0
