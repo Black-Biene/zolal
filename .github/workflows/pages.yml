@@ -10,6 +10,24 @@ jobs:
       - run: rustup target add wasm32-wasip1
       - run: cargo build --release -p zolal-cli --target wasm32-wasip1 --locked
       - run: cp target/wasm32-wasip1/release/zolal-cli.wasm web/
+      # TrustMark reader models for the lab's tm.html (~130 MB, too big for git): built from Adobe's files by
+      # onnx_export.py, cached until the script or its pinned versions change.
+      - id: tm-models
+        uses: actions/cache@v4
+        with:
+          path: web/lab/models
+          key: tm-models-${{ hashFiles('research/ai-watermarks/onnx_export.py', 'research/ai-watermarks/requirements-export.txt') }}
+      - if: steps.tm-models.outputs.cache-hit != 'true'
+        uses: actions/setup-python@v5
+        with: { python-version: "3.14" }
+      - if: steps.tm-models.outputs.cache-hit != 'true'
+        working-directory: research/ai-watermarks
+        run: |
+          pip install torch==2.14.0 torchvision==0.29.0 --index-url https://download.pytorch.org/whl/cpu
+          pip install -r requirements-export.txt
+          python onnx_export.py
+          mkdir -p ../../web/lab/models
+          cp models/decoder_Q.onnx models/detector_Q_fp16w.onnx models/detector_Q_int8.onnx ../../web/lab/models/
       # Tag asset URLs with the commit so browsers never mix a new page with cached old files.
       - run: sed -i "s/?v=dev/?v=${GITHUB_SHA::8}/g" web/index.html web/app.js web/sw.js web/lab/*.html web/lab/*.js
       - uses: actions/upload-pages-artifact@v3

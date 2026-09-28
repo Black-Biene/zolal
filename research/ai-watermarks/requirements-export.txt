@@ -1,0 +1,9 @@
+# What onnx_export.py needs, pinned. Install torch/torchvision from the CPU index first (no CUDA download):
+#   pip install torch==2.14.0 torchvision==0.29.0 --index-url https://download.pytorch.org/whl/cpu
+#   pip install -r requirements-export.txt
+trustmark==0.9.2
+onnx==1.23.0
+onnxruntime==1.30.0
+numpy==2.5.3
+pillow==12.3.0
+omegaconf==2.3.1

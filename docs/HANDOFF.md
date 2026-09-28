@@ -35,7 +35,7 @@ Everything a new chat needs to continue this project. Last updated 2026-09-26.
 | `crates/zolal-cli` | CLI (`hide`, `reveal`, `clean`, `probe`); compiled to `wasm32-wasip1` for the web page |
 | `web/` | The site: `index.html`, `app.js`, `style.css`, `sw.js` (offline), `manifest.webmanifest`, icons |
 | `web/vendor/` | `browser_wasi_shim` 0.4.1 (MIT) and `libheif` WASM from libheif-js 1.23.2 (LGPL-3.0, for HEIC) |
-| `web/lab/` | Camera-readable hidden text experiment (`wm.js` engine, `lab.js` UI, `worker.js`) |
+| `web/lab/` | Camera-readable hidden text experiment (`wm.js` engine, `lab.js` UI, `worker.js`); `tm.html`/`tm.js`/`bch.js`: TrustMark reader |
 | `research/camera-watermark/` | Python prototype + simulated channels + results for our own method |
 | `research/ai-watermarks/` | `tm_test.py`: test kit for Adobe TrustMark, run on the owner's laptop |
 
@@ -96,8 +96,10 @@ This is the **first real-camera success**.
 2. ~~Model sizes~~ done: `research/ai-watermarks/onnx_export.py` builds ONNX reader models; smallest working
    pair is int8 detector (42 MB) + Adobe's fp16 decoder (47 MB) = 89 MB. See that folder's README.
    **Browser reader works on the iPhone:** `web/lab/tm.html` (models in git-ignored `web/lab/models/`, serve
-   locally with `.claude/launch.json`) read a fresh camera shot in ~4.5 s. Deploying it needs a way to ship the
-   models (proposal: the Pages workflow downloads them instead of committing them).
+   locally with `.claude/launch.json`) read a fresh camera shot in ~4.5 s, and a camera shot sent through
+   Telegram. Live at https://black-biene.github.io/zolal/lab/tm.html (linked from the lab page): the Pages
+   workflow builds the models with `onnx_export.py` and caches them. Scan close up, like a QR code; distance is
+   not a goal. `bch.js` has a stopgap against false reads until the password layer adds a check value.
 3. If TrustMark holds up: run it in the browser with ONNX Runtime Web (Adobe ships ONNX models for its JS/Rust
    ports), vendor the models into `web/` (MIT allows it), and design a compact password layer (61 bits leaves
    ~5–6 characters after a check; e.g. Argon2id-derived keystream + short check value).
