@@ -6,7 +6,7 @@
 <meta name="referrer" content="no-referrer">
 <meta name="color-scheme" content="light">
 <meta name="robots" content="noindex">
-<title>Zolal Lab — TrustMark reader</title>
+<title>Zolal Lab — TrustMark</title>
 <link rel="icon" href="../icon-32.png" sizes="32x32" type="image/png">
 <link rel="stylesheet" href="../style.css?v=dev">
 <link rel="stylesheet" href="lab.css?v=dev">
@@ -15,33 +15,64 @@
   <img class="logo" src="../icon-180.png" alt="" width="44" height="44">
   <div>
     <h1>Zolal Lab</h1>
-    <p>TrustMark reader test: runs Adobe's watermark models on this phone.</p>
+    <p>TrustMark test: hide a short text in a photo, read it back with the camera.</p>
   </div>
 </header>
 
 <main class="card">
-  <p class="lab-note"><strong>Experiment.</strong> Reads pictures marked with <code>tm_test.py mark</code>. The
-  first read downloads the models (90–130 MB) and runs everything on this device.</p>
+  <p class="lab-note"><strong>Experiment.</strong> Runs Adobe's watermark models on this device; nothing is
+  uploaded. The first use downloads them (hiding ~65 MB, reading 90–130 MB).</p>
 
-  <p class="actions-row">
-    <label class="again file-button">Take photo<input id="shoot" type="file" accept="image/*" capture="environment"></label>
-    <label class="again file-button">Choose image<input id="pick" type="file" accept="image/*"></label>
-  </p>
-  <p class="hint">
-    <label>Detector <select id="det">
-      <option value="detector_Q_fp16w.onnx">fp16, 83 MB (faster)</option>
-      <option value="detector_Q_int8.onnx">int8, 42 MB (smaller)</option>
-    </select></label>
-    <label>Size <select id="side">
-      <option>640</option><option>1024</option><option>1600</option>
-    </select> px</label>
-  </p>
-  <p class="hint"><label>Password <input id="pw" type="password" autocomplete="off" spellcheck="false"
-    placeholder="leave empty for marks without one"></label></p>
-  <p class="hint">Scan it like a QR code: hold the phone close, so the picture fills most of the photo.</p>
-  <div id="status" class="status" role="status" aria-live="polite"></div>
-  <canvas id="crop" class="preview" width="256" height="256" hidden></canvas>
-  <pre id="log" class="hint"></pre>
+  <div class="tabs" role="tablist">
+    <button role="tab" id="tab-hide" aria-controls="panel-hide" aria-selected="false" tabindex="-1">Hide</button>
+    <button role="tab" id="tab-read" aria-controls="panel-read" aria-selected="true">Reveal</button>
+  </div>
+
+  <section id="panel-hide" role="tabpanel" aria-labelledby="tab-hide" hidden>
+    <ol class="steps">
+      <li class="step">
+        <h2 class="step-title"><span class="num" aria-hidden="true">1</span> Choose a photo</h2>
+        <input id="m-photo" type="file" accept="image/*" class="plain-file">
+        <p class="hint">Busy photos (trees, streets) hide the mark best.</p>
+      </li>
+      <li class="step">
+        <h2 class="step-title"><span class="num" aria-hidden="true">2</span> Text and password</h2>
+        <p class="hint"><input id="m-text" maxlength="6" autocomplete="off" spellcheck="false" placeholder="lingen">
+        up to 6: letters, digits, space, “.”</p>
+        <p class="hint"><input id="m-pw" type="password" autocomplete="new-password" placeholder="password"></p>
+      </li>
+    </ol>
+    <button id="m-go" class="primary">Hide text</button>
+    <div id="m-status" class="status" role="status" aria-live="polite"></div>
+    <div id="m-result" hidden>
+      <canvas id="m-view" class="preview"></canvas>
+      <p class="actions-row"><button id="m-save" class="again">Save picture (PNG)</button></p>
+      <p class="hint">Send it as a file or a normal photo, show it on a screen or print it; then read it in
+      <em>Reveal</em>.</p>
+    </div>
+  </section>
+
+  <section id="panel-read" role="tabpanel" aria-labelledby="tab-read">
+    <p class="actions-row">
+      <label class="again file-button">Take photo<input id="shoot" type="file" accept="image/*" capture="environment"></label>
+      <label class="again file-button">Choose image<input id="pick" type="file" accept="image/*"></label>
+    </p>
+    <p class="hint">
+      <label>Detector <select id="det">
+        <option value="detector_Q_fp16w.onnx">fp16, 83 MB (faster)</option>
+        <option value="detector_Q_int8.onnx">int8, 42 MB (smaller)</option>
+      </select></label>
+      <label>Size <select id="side">
+        <option>640</option><option>1024</option><option>1600</option>
+      </select> px</label>
+    </p>
+    <p class="hint"><label>Password <input id="pw" type="password" autocomplete="off" spellcheck="false"
+      placeholder="leave empty for marks without one"></label></p>
+    <p class="hint">Scan it like a QR code: hold the phone close, so the picture fills most of the photo.</p>
+    <div id="status" class="status" role="status" aria-live="polite"></div>
+    <canvas id="crop" class="preview" width="256" height="256" hidden></canvas>
+    <pre id="log" class="hint"></pre>
+  </section>
   <p class="hint"><a href="./">← Back to the camera lab</a></p>
 </main>
 

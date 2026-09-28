@@ -1,6 +1,6 @@
 .lab-note { margin: 0 0 16px; padding: 10px 12px; border-radius: 10px; background: var(--warn-soft); border: 1px solid var(--warn-line); font-size: .9rem }
 .lab-note strong { color: var(--warn) }
-#panel-make, #panel-read { padding-top: 16px }
+#panel-make, #panel-read, #panel-hide { padding-top: 16px }
 .plain-file { font: inherit; width: 100% }
 .preview { display: block; width: 100%; height: auto; border-radius: 10px; margin: 12px 0 8px }
 .actions-row { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 12px }

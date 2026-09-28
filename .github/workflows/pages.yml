@@ -27,7 +27,7 @@ jobs:
           pip install -r requirements-export.txt
           python onnx_export.py
           mkdir -p ../../web/lab/models
-          cp models/decoder_Q.onnx models/detector_Q_fp16w.onnx models/detector_Q_int8.onnx ../../web/lab/models/
+          cp models/encoder_Q.onnx models/decoder_Q.onnx models/detector_Q_fp16w.onnx models/detector_Q_int8.onnx ../../web/lab/models/
       # Tag asset URLs with the commit so browsers never mix a new page with cached old files.
       - run: sed -i "s/?v=dev/?v=${GITHUB_SHA::8}/g" web/index.html web/app.js web/sw.js web/lab/*.html web/lab/*.js
       - uses: actions/upload-pages-artifact@v3

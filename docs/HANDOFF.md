@@ -100,7 +100,8 @@ This is the **first real-camera success**.
    Telegram. Live at https://black-biene.github.io/zolal/lab/tm.html (linked from the lab page): the Pages
    workflow builds the models with `onnx_export.py` and caches them. Scan close up, like a QR code; distance is
    not a goal. **Password layer done** (`tmseal.py` / `web/lab/tmseal.js`): 6 characters, PBKDF2 key, 16-bit
-   tag; mark with `tm_test.py mark PHOTO TEXT PASSWORD`. Details and limits in the research README.
+   tag; mark on the page's *Hide* tab or with `tm_test.py mark PHOTO TEXT PASSWORD`. Details and limits in the
+   research README. Next idea: WebGPU for speed (ORT's webgpu build, ~28 MB), with the CPU path as fallback.
 3. If TrustMark holds up: run it in the browser with ONNX Runtime Web (Adobe ships ONNX models for its JS/Rust
    ports), vendor the models into `web/` (MIT allows it), and design a compact password layer (61 bits leaves
    ~5–6 characters after a check; e.g. Argon2id-derived keystream + short check value).

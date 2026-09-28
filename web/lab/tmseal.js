@@ -21,13 +21,28 @@ async function hmacKey(password, nonce) {
 }
 const mac = (key, ...parts) => subtle.sign("HMAC", key, concat(...parts));
 
+const keystream = async (key, n) => bitsOf(await mac(key, enc.encode("enc")), n);
+
+// text (up to 6 characters of ALPHABET) -> 61-bit string with a fresh random nonce.
+export async function seal(text, password) {
+  if (text.length > CHARS || [...text].some(c => !ALPHABET.includes(c))) {
+    throw new Error(`Use up to ${CHARS} characters: letters, digits, space or "."`);
+  }
+  const nonce = [...crypto.getRandomValues(new Uint8Array(2))].map(b => b.toString(2).padStart(8, "0")).join("").slice(0, NONCE);
+  const key = await hmacKey(password, nonce);
+  const pt = [...text.padEnd(CHARS)].map(c => ALPHABET.indexOf(c).toString(2).padStart(6, "0")).join("");
+  const ks = await keystream(key, pt.length);
+  const ct = [...pt].map((b, i) => (b === ks[i] ? "0" : "1")).join("");
+  return nonce + ct + bitsOf(await mac(key, enc.encode("tag"), pack(nonce + ct)), TAG);
+}
+
 // 61-bit string -> text, or null if the password is wrong or the bits aren't a sealed payload.
 export async function openSealed(bits, password) {
   const nonce = bits.slice(0, NONCE), ct = bits.slice(NONCE, NONCE + 6 * CHARS), tag = bits.slice(NONCE + 6 * CHARS);
   const key = await hmacKey(password, nonce);
   // a 16-bit tag makes a timing-safe compare moot: there is no online oracle here, only this page
   if (bitsOf(await mac(key, enc.encode("tag"), pack(nonce + ct)), TAG) !== tag) return null;
-  const ks = bitsOf(await mac(key, enc.encode("enc")), ct.length);
+  const ks = await keystream(key, ct.length);
   let text = "";
   for (let i = 0; i < ct.length; i += 6) {
     let v = 0;

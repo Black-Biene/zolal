@@ -61,6 +61,11 @@ def decode(tm, img, password=None, **kw):
 
 
 def cmd_mark(photo, text, password=None):
+    if password:
+        try:
+            tmseal.seal(text, "check")  # fail fast on a text that can't fit, before loading the model
+        except ValueError as e:
+            sys.exit(f"Can't hide {text!r} ({len(text)} characters): {e}")
     OUT.mkdir(exist_ok=True)
     tm = load_trustmark()
     cover = Image.open(photo).convert("RGB")

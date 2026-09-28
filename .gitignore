@@ -1,3 +1,4 @@
 target/
 web/zolal-cli.wasm
 web/lab/models/
+.DS_Store

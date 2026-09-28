@@ -63,6 +63,15 @@ is secret). A stolen picture can be attacked offline: each password guess costs 
 filters wrong ones, so only a strong password protects 6 characters. The 9-bit nonce means two marks made
 with the same password share a keystream 1 time in 512, so use a new password per picture for anything real.
 
+## Hiding in the browser
+
+The lab page's *Hide* tab does what `tm_test.py mark PHOTO TEXT PASSWORD` does, on the phone: seal
+(`tmseal.js`), BCH-encode (`bch.js`, equal to Python on 2000/2000 random payloads), Adobe's `encoder_Q.onnx`
+(17 MB) at 256×256, then TrustMark's post-processing in JS (residual minus its colour shift, bilinear
+upscale, 1% edge fade). It reads the result back before offering the PNG. On the owner's 12 MP photo:
+0.6 s on the MacBook, PSNR 39.4 dB (at 1200 px), and a 1200 px JPEG copy read back at quality 90, 70 and 50.
+Photos above 16 MP are scaled down first (iOS canvas limit).
+
 ## Browser-sized models (ONNX)
 
 `python onnx_export.py` builds the reader models into `models/` (git-ignored; `pip install onnx onnxruntime`

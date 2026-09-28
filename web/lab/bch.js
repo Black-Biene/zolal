@@ -12,6 +12,28 @@ for (let i = 0, x = 1; i < N; i++) {
 }
 const mul = (a, b) => (a && b ? EXP[LOG[a] + LOG[b]] : 0);
 
+// Generator g(x): binary polynomial whose roots are alpha^1..alpha^2T and their conjugates. Coefficients over
+// GF(2^7) while multiplying out; the result is binary (0/1), highest power first.
+const GEN = (() => {
+  const roots = new Set();
+  for (let i = 1; i < 2 * T; i += 2) for (let r = i, j = 0; j < M; j++, r = (2 * r) % N) roots.add(r);
+  let g = [1];
+  for (const r of roots) {  // g *= (x + alpha^r)
+    const next = [...g, 0];
+    for (let i = 0; i < g.length; i++) next[i + 1] ^= mul(g[i], EXP[r]);
+    g = next;
+  }
+  return g;  // length ECC + 1
+})();
+
+// "0101…" of 61 data bits -> 100 booleans: data, 35 check bits (remainder of data(x)·x^35 mod g, with the 3
+// padding zeros counted as data), version 0001.
+export function encode(data) {
+  const r = [...data, "0", "0", "0"].map(Number).concat(new Array(ECC).fill(0));
+  for (let i = 0; i < DATA + 3; i++) if (r[i]) for (let j = 0; j < GEN.length; j++) r[i + j] ^= GEN[j];
+  return [...data].map(b => b === "1").concat(r.slice(DATA + 3).map(Boolean), [false, false, false, true]);
+}
+
 // bits: 100 booleans from the decoder model (logit > 0). Returns the 61 corrected data bits as a "0101…"
 // string, or null if they aren't a BCH_5 codeword within 5 errors.
 export function correct(bits) {

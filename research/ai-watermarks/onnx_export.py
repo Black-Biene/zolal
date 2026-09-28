@@ -1,11 +1,11 @@
 """Build browser-sized TrustMark reader models in models/ and check them on a camera shot.
 
 Usage:
-  python onnx_export.py                        # build models/decoder_Q.onnx and models/detector_Q_*.onnx
+  python onnx_export.py                        # build models/{encoder,decoder}_Q.onnx and models/detector_Q_*.onnx
   python onnx_export.py check SHOT.jpg         # run the ONNX detector + decoder on a camera photo
 
-The decoder is Adobe's own ONNX file (already fp16). The picture detector has no ONNX release, so it is
-exported from the PyTorch checkpoint, then shrunk: fp16w stores weights as fp16 (maths stays fp32), int8 is
+The decoder and encoder are Adobe's own ONNX files (the decoder already fp16). The picture detector has no ONNX
+release, so it is exported from the PyTorch checkpoint, then shrunk: fp16w stores weights as fp16 (maths stays fp32), int8 is
 onnxruntime's dynamic quantisation. The int8 decoder was tested and dropped: it lost camera decodes.
 Needs: requirements-export.txt (the Pages workflow runs this to put the models on the live lab page)
 """
@@ -19,8 +19,12 @@ import numpy as np
 from PIL import Image
 
 M = Path("models")
-DECODER_URL = "https://cai-watermark.adobe.net/watermarking/trustmark-models/decoder_Q.onnx"
-DECODER_SHA256 = "ee3268f057c9dabef680e169302f5973d0589feea86189ed229a896cc3aa88df"
+ADOBE = "https://cai-watermark.adobe.net/watermarking/trustmark-models/"
+# Adobe's own ONNX files, pinned: the web page serves them, so refuse anything but the versions tested here
+ADOBE_SHA256 = {
+    "decoder_Q.onnx": "ee3268f057c9dabef680e169302f5973d0589feea86189ed229a896cc3aa88df",
+    "encoder_Q.onnx": "19b3d1b25836130ffd78775a8f61539f993375d1823ef0e59ba5b8dffb4f892d",
+}
 
 
 def build():
@@ -31,11 +35,11 @@ def build():
     from trustmark import TrustMark
 
     M.mkdir(exist_ok=True)
-    if not (M / "decoder_Q.onnx").exists():
-        urllib.request.urlretrieve(DECODER_URL, M / "decoder_Q.onnx")
-    # the web page serves this file, so refuse anything but the version tested here
-    if hashlib.sha256((M / "decoder_Q.onnx").read_bytes()).hexdigest() != DECODER_SHA256:
-        sys.exit("decoder_Q.onnx does not match the tested version (DECODER_SHA256)")
+    for name, sha in ADOBE_SHA256.items():
+        if not (M / name).exists():
+            urllib.request.urlretrieve(ADOBE + name, M / name)
+        if hashlib.sha256((M / name).read_bytes()).hexdigest() != sha:
+            sys.exit(f"{name} does not match the tested version (ADOBE_SHA256)")
 
     tm = TrustMark(verbose=False, model_type="Q", loadRemover=False, loadBBoxDetector=True, device="cpu")
 
