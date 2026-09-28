@@ -81,6 +81,15 @@ read. The mark itself survives (a hand-made crop, turned upright, decodes in 130
 detector's box is ~10% loose. Re-detecting inside the rough box ("zoom") fixed it at 1024 px in Python. Decision:
 scan like a QR code, close up; long distance is not a goal, so the zoom step is not in the page.
 
+**Normal distance, slightly from above** (`samples/fail-8843.jpg`, picture ~57% of the shot's width): the live
+page failed on the iPhone. The mark was fine (5501/6561 crops around the true edges decode), but the
+detector's box took in part of the window below the picture: ~18% too tall in Python, ~30% too wide in the
+browser. So the page now zooms by default: it detects again inside the first box plus a 10% margin, where the
+picture fills the view. In the browser the zoomed box decoded this shot on the first try, and the three
+close-up shots on the first or second try. Cost: a second detector run, so a read takes ~6 s on the MacBook.
+The page also skips the other rotations when the upright view found the picture with score ≥ 0.9 (the
+failed read above spent ~60 s on them).
+
 **False reads:** with dozens of tries per shot, random bits sometimes pass BCH_5 (the zoom test printed
 `]w +D]U` and `CzekuS;AX`). `web/lab/bch.js` now also demands bits 56–63 zero (texts of up to 8 characters)
 and printable ASCII, and ignores the 4 unprotected version bits: 3000/3000 damaged real marks (0–5 bad bits)

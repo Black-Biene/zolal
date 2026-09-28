@@ -59,6 +59,37 @@ function rotated(bmp, quarter) {
   return c;
 }
 
+const fmt = (b, img) => [b[0] / img.width, b[1] / img.height, b[2] / img.width, b[3] / img.height]
+  .map(v => v.toFixed(3)).join(" ");
+
+// Detector on region [x, y, w, h] of img, scaled so its longest edge is `side`. Boxes come back in img pixels.
+async function detect(det, img, side, [x, y, w, h] = [0, 0, img.width, img.height]) {
+  const s = side / Math.max(w, h), small = draw(img, Math.round(w * s), Math.round(h * s), x, y, w, h);
+  const { boxes, scores } = await det.run({ image: tensor(small, [3, small.height, small.width], v => v) });
+  return [...scores.data].map((score, i) => ({
+    score, box: [...boxes.data.slice(4 * i, 4 * i + 4)].map((v, k) => v / s + (k % 2 ? y : x)),
+  }));
+}
+
+// The decoder needs the crop within ~1% of the picture's edges, and the browser's resize makes the box differ
+// slightly from Python's, so try it as is, shrunk/grown (g) and shifted (dx, dy), in fractions of the box.
+async function decodeBox(dec, img, [x1, y1, x2, y2], label) {
+  const w = x2 - x1, h = y2 - y1, t = performance.now();
+  let tries = 0;
+  for (const g of [0, 0.01, 0.02, -0.01]) for (const [dx, dy] of [[0, 0], [0, .01], [0, -.01], [.01, 0], [-.01, 0]]) {
+    tries++;
+    const crop = draw(img, 256, 256, x1 + (g + dx) * w, y1 + (g + dy) * h, (1 - 2 * g) * w, (1 - 2 * g) * h);
+    const out = (await dec.run({ image: tensor(crop, [1, 3, 256, 256], v => v * 2 - 1) })).output.data;
+    const text = decodePayload([...out].map(v => v > 0));
+    if (text === null) continue;
+    log(`  ${label}: decoded on try ${tries} (shrink ${g}, shift ${dx},${dy}) in ${ms(t)}`);
+    draw(crop, 256, 256, 0, 0, 256, 256, $("crop")); $("crop").hidden = false;
+    return text;
+  }
+  log(`  ${label}: nothing after ${tries} tries, ${ms(t)}`);
+  return null;
+}
+
 async function read(file) {
   $("log").textContent = ""; $("crop").hidden = true;
   say("busy", "Opening the photo…"); await tick();
@@ -68,34 +99,30 @@ async function read(file) {
   const side = +$("side").value;
 
   for (let q = 0; q < 4; q++) {  // like TrustMark's ROTATION: try 0°, 90°, 180°, 270°
-    const img = rotated(bmp, q), s = side / Math.max(img.width, img.height);
+    const img = rotated(bmp, q);
     say("busy", `Looking for the picture${q ? ` (turned ${q * 90}°)` : ""}…`); await tick();
     let t = performance.now();
-    const small = draw(img, Math.round(img.width * s), Math.round(img.height * s));
-    const { boxes, scores } = await det.run({ image: tensor(small, [3, small.height, small.width], v => v) });
-    log(`${q * 90}°: detector ${ms(t)}, ${scores.data.length} box(es)`);
+    const found = await detect(det, img, side);
+    log(`${q * 90}°: detector ${ms(t)}, ${found.length} box(es)`);
 
-    for (let i = 0; i < scores.data.length; i++) {
-      const [x1, y1, x2, y2] = [...boxes.data.slice(4 * i, 4 * i + 4)].map(v => v / s);
-      const at = [x1 / img.width, y1 / img.height, x2 / img.width, y2 / img.height].map(v => v.toFixed(3)).join(" ");
-      log(`  box ${i + 1} [${at}] score ${scores.data[i].toFixed(2)}`);
-      // The decoder needs the crop within ~1% of the picture's edges, and the browser's resize makes the box
-      // differ slightly from Python's, so also try it shrunk/grown (g) and shifted (dx, dy), as box fractions.
-      const w = x2 - x1, h = y2 - y1;
+    // weak extra boxes cost ~10 s each on a phone and have never held the mark
+    for (const [i, { box, score }] of found.filter((f, i) => !i || f.score >= 0.5).entries()) {
+      log(`  box ${i + 1} [${fmt(box, img)}] score ${score.toFixed(2)}`);
+      // Zoom: in a shot where the picture is smaller, the box can be ~20% loose. Detecting again inside the
+      // box plus a 10% margin, where the picture fills the view, gives edges tight enough to decode.
+      const [x1, y1, x2, y2] = box, mw = 0.1 * (x2 - x1), mh = 0.1 * (y2 - y1);
+      const zx = Math.max(0, x1 - mw), zy = Math.max(0, y1 - mh);
+      const region = [zx, zy, Math.min(img.width, x2 + mw) - zx, Math.min(img.height, y2 + mh) - zy];
+      say("busy", "Zooming in on the picture…"); await tick();
       t = performance.now();
-      let tries = 0;
-      for (const g of [0, 0.01, 0.02, -0.01]) for (const [dx, dy] of [[0, 0], [0, .01], [0, -.01], [.01, 0], [-.01, 0]]) {
-        tries++;
-        const crop = draw(img, 256, 256, x1 + (g + dx) * w, y1 + (g + dy) * h, (1 - 2 * g) * w, (1 - 2 * g) * h);
-        const out = (await dec.run({ image: tensor(crop, [1, 3, 256, 256], v => v * 2 - 1) })).output.data;
-        const text = decodePayload([...out].map(v => v > 0));
-        if (text === null) continue;
-        log(`  decoded on try ${tries} (shrink ${g}, shift ${dx},${dy}) in ${ms(t)}`);
-        draw(crop, 256, 256, 0, 0, 256, 256, $("crop")); $("crop").hidden = false;
-        return say("ok", `Found: ${text}`);
-      }
-      log(`  nothing after ${tries} tries, ${ms(t)}`);
+      const [top] = await detect(det, img, side, region);
+      if (top) log(`  zoomed box [${fmt(top.box, img)}] in ${ms(t)}`);
+      say("busy", "Reading…"); await tick();
+      const text = (top && await decodeBox(dec, img, top.box, "zoomed")) || await decodeBox(dec, img, box, "first box");
+      if (text !== null) return say("ok", `Found: ${text}`);
     }
+    // an upright view that clearly found the picture isn't fixed by turning it; skip the ~40 s of rotations
+    if (!q && found[0]?.score >= 0.9) break;
   }
   say("err", "No hidden text found. Get closer so the picture fills more of the shot, and hold still.");
 }
