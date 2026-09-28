@@ -1,8 +1,10 @@
 """Test Adobe TrustMark (an AI image watermark) for Zolal's camera idea.
 
 Usage:
-  python tm_test.py mark PHOTO.jpg "zolal12"   # hide a short text, run digital tests, save results in out/
-  python tm_test.py read SHOT.jpg              # read a camera photo / screenshot / received file
+  python tm_test.py mark PHOTO.jpg "zolal12"          # hide a short text, run digital tests, save results in out/
+  python tm_test.py read SHOT.jpg                     # read a camera photo / screenshot / received file
+  python tm_test.py mark PHOTO.jpg "Hi.42" PASSWORD   # with a password: up to 6 characters, see tmseal.py
+  python tm_test.py read SHOT.jpg PASSWORD
 
 `mark` saves out/<name>-marked.png (the picture to show on screen, print or send), out/<name>-compare.png
 (original | marked | 10x difference, to judge visibility) and prints how it survives Telegram-like
@@ -16,6 +18,8 @@ from pathlib import Path
 
 import numpy as np
 from PIL import Image
+
+import tmseal
 
 OUT = Path("out")
 
@@ -45,15 +49,18 @@ def psnr(a, b):
     return 99.0 if mse == 0 else 10 * np.log10(255 ** 2 / mse)
 
 
-def decode(tm, img, **kw):
+def decode(tm, img, password=None, **kw):
     try:
+        if password:  # sealed payload: 61 raw bits, opened with the password (None if it doesn't match)
+            bits, present, schema = tm.decode(img, MODE="binary", **kw)
+            return (tmseal.open_(bits, password) if present else None), present
         secret, present, schema = tm.decode(img, MODE="text", **kw)
         return (secret if present else None), present
     except Exception as e:  # keep going: one failing method shouldn't hide the others
         return f"ERROR {type(e).__name__}: {e}", False
 
 
-def cmd_mark(photo, text):
+def cmd_mark(photo, text, password=None):
     OUT.mkdir(exist_ok=True)
     tm = load_trustmark()
     cover = Image.open(photo).convert("RGB")
@@ -61,7 +68,7 @@ def cmd_mark(photo, text):
     print(f"Cover: {photo} {cover.size[0]}x{cover.size[1]}, text: {text!r} ({len(text)} chars)")
 
     t = time.time()
-    marked = tm.encode(cover, text, MODE="text")
+    marked = tm.encode(cover, tmseal.seal(text, password), MODE="binary") if password else tm.encode(cover, text, MODE="text")
     print(f"  encoded in {time.time() - t:.1f}s")
     marked_path = OUT / f"{name}-marked.png"
     marked.save(marked_path)
@@ -84,10 +91,10 @@ def cmd_mark(photo, text):
         "very harsh: 512px, JPEG q50": jpeg(marked, 50, 512),
     }
     for label, img in tests.items():
-        got, _ = decode(tm, img)
+        got, _ = decode(tm, img, password)
         print(f"  {'1' if got == text else '0'}  {label:34s} -> {got!r}")
     print(f"\nNow show {marked_path} on a screen (or print it), photograph it with your phone, and run:\n"
-          f"  python tm_test.py read YOUR_SHOT.jpg")
+          f"  python tm_test.py read YOUR_SHOT.jpg{' PASSWORD' if password else ''}")
 
 
 def crops(img):
@@ -98,20 +105,20 @@ def crops(img):
         yield f"centre crop {int(f * 100)}%", img.crop(((w - cw) // 2, (h - ch) // 2, (w + cw) // 2, (h + ch) // 2))
 
 
-def cmd_read(shot):
+def cmd_read(shot, password=None):
     img = Image.open(shot).convert("RGB")
     print(f"Shot: {shot} {img.size[0]}x{img.size[1]}")
     tm = load_trustmark()
     found = False
     for label, im in crops(img):
-        got, present = decode(tm, im)
+        got, present = decode(tm, im, password)
         print(f"  {'FOUND' if got and not str(got).startswith('ERROR') else '  -  '}  {label:18s} -> {got!r}")
         found |= bool(got) and not str(got).startswith("ERROR")
     print("With TrustMark's own picture detector (finds the marked picture inside the photo):")
     try:
         tmd = load_trustmark(detector=True)
         for kw in ({"DETECTFIRST": True}, {"DETECTFIRST": True, "ROTATION": True}):
-            got, present = decode(tmd, img, **kw)
+            got, present = decode(tmd, img, password, **kw)
             print(f"  {'FOUND' if got and not str(got).startswith('ERROR') else '  -  '}  {str(kw):38s} -> {got!r}")
             found |= bool(got) and not str(got).startswith("ERROR")
     except Exception as e:
@@ -121,9 +128,9 @@ def cmd_read(shot):
 
 
 if __name__ == "__main__":
-    if len(sys.argv) >= 4 and sys.argv[1] == "mark":
-        cmd_mark(sys.argv[2], sys.argv[3])
-    elif len(sys.argv) == 3 and sys.argv[1] == "read":
-        cmd_read(sys.argv[2])
+    if len(sys.argv) in (4, 5) and sys.argv[1] == "mark":
+        cmd_mark(*sys.argv[2:])
+    elif len(sys.argv) in (3, 4) and sys.argv[1] == "read":
+        cmd_read(*sys.argv[2:])
     else:
         print(__doc__)

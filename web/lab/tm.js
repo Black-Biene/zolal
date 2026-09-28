@@ -2,7 +2,8 @@
 // both ONNX models run by onnxruntime-web on the CPU, then BCH error correction. Mirrors TrustMark's Python
 // decode(DETECTFIRST=True, ROTATION=True); see research/ai-watermarks/onnx_export.py for the models.
 import * as ort from "../vendor/onnxruntime-web/ort.wasm.min.mjs";
-import { decodePayload } from "./bch.js?v=dev";
+import { correct, decodePayload } from "./bch.js?v=dev";
+import { openSealed } from "./tmseal.js?v=dev";
 
 ort.env.wasm.wasmPaths = new URL("../vendor/onnxruntime-web/", import.meta.url).href;
 ort.env.wasm.numThreads = 1;  // threads need cross-origin isolation, which GitHub Pages can't turn on
@@ -73,14 +74,32 @@ async function detect(det, img, side, [x, y, w, h] = [0, 0, img.width, img.heigh
 
 // The decoder needs the crop within ~1% of the picture's edges, and the browser's resize makes the box differ
 // slightly from Python's, so try it as is, shrunk/grown (g) and shifted (dx, dy), in fractions of the box.
-async function decodeBox(dec, img, [x1, y1, x2, y2], label) {
+// With a password only sealed marks count (their 16-bit tag rejects random bits); without one, plain marks.
+// `seen` records a mark that passed error correction but didn't open, to tell "wrong password" from "nothing".
+async function payloadText(bits, password, seen) {
+  if (!password) {
+    const text = decodePayload(bits);
+    if (text === null && correct(bits) !== null) seen.locked = true;
+    return text;
+  }
+  const data = correct(bits);
+  if (data === null) return null;
+  // nudged crops keep yielding the same payload; the password check is the slow step, so run it once each
+  if (!seen.opened.has(data)) seen.opened.set(data, await openSealed(data, password));
+  const text = seen.opened.get(data);
+  if (text === null) seen.locked = true;
+  return text;
+}
+
+async function decodeBox(dec, img, [x1, y1, x2, y2], label, password, seen) {
   const w = x2 - x1, h = y2 - y1, t = performance.now();
   let tries = 0;
   for (const g of [0, 0.01, 0.02, -0.01]) for (const [dx, dy] of [[0, 0], [0, .01], [0, -.01], [.01, 0], [-.01, 0]]) {
     tries++;
     const crop = draw(img, 256, 256, x1 + (g + dx) * w, y1 + (g + dy) * h, (1 - 2 * g) * w, (1 - 2 * g) * h);
     const out = (await dec.run({ image: tensor(crop, [1, 3, 256, 256], v => v * 2 - 1) })).output.data;
-    const text = decodePayload([...out].map(v => v > 0));
+    const text = await payloadText([...out].map(v => v > 0), password, seen);
+    if (seen.locked) break;  // a real mark that doesn't open: other crops would give the same bits
     if (text === null) continue;
     log(`  ${label}: decoded on try ${tries} (shrink ${g}, shift ${dx},${dy}) in ${ms(t)}`);
     draw(crop, 256, 256, 0, 0, 256, 256, $("crop")); $("crop").hidden = false;
@@ -96,7 +115,7 @@ async function read(file) {
   const bmp = await createImageBitmap(file);
   log(`photo: ${bmp.width}×${bmp.height}, ${(file.size / 1e6).toFixed(1)} MB`);
   const det = await model($("det").value), dec = await model("decoder_Q.onnx");
-  const side = +$("side").value;
+  const side = +$("side").value, password = $("pw").value, seen = { locked: false, opened: new Map() };
 
   for (let q = 0; q < 4; q++) {  // like TrustMark's ROTATION: try 0°, 90°, 180°, 270°
     const img = rotated(bmp, q);
@@ -118,12 +137,17 @@ async function read(file) {
       const [top] = await detect(det, img, side, region);
       if (top) log(`  zoomed box [${fmt(top.box, img)}] in ${ms(t)}`);
       say("busy", "Reading…"); await tick();
-      const text = (top && await decodeBox(dec, img, top.box, "zoomed")) || await decodeBox(dec, img, box, "first box");
+      const text = (top && await decodeBox(dec, img, top.box, "zoomed", password, seen))
+        ?? (seen.locked ? null : await decodeBox(dec, img, box, "first box", password, seen));
       if (text !== null) return say("ok", `Found: ${text}`);
+      if (seen.locked) break;
     }
     // an upright view that clearly found the picture isn't fixed by turning it; skip the ~40 s of rotations
-    if (!q && found[0]?.score >= 0.9) break;
+    if (seen.locked || (!q && found[0]?.score >= 0.9)) break;
   }
+  if (seen.locked) return say("err", password
+    ? "Found a mark, but this password doesn't open it."
+    : "Found a mark that needs a password. Type it above and read again.");
   say("err", "No hidden text found. Get closer so the picture fills more of the shot, and hold still.");
 }
 

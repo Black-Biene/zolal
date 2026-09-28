@@ -44,6 +44,25 @@ correction (8 ASCII characters).
 
 Still to test: distance, angle, a picture sent through Telegram as a normal photo, a plain diagram, print.
 
+## Password layer
+
+`python tm_test.py mark photo.jpg "Hi.42" PASSWORD` seals the text (`tmseal.py`; `web/lab/tmseal.js` opens it
+in the page, which has a password field). The 61 bits: nonce 9 | ciphertext 36 | tag 16.
+
+- Text: up to 6 characters of `a–z A–Z 0–9 space .` (6 bits each).
+- Key: PBKDF2-SHA256, 600,000 rounds, salt `zolal-tm1` + nonce (built into WebCrypto and Python, no extra
+  library; the main site's Argon2id would need one on both sides). Keystream and tag: HMAC-SHA256 with that key.
+- Tag: rejects a wrong password, and random bits that happen to pass BCH (1 in 65,536). It replaces the
+  printable-ASCII stopgap for sealed marks; marks without a password still read as before.
+- Checked: 40 Python-sealed payloads open in JS (incl. Persian and accented passwords), 40 wrong passwords
+  rejected; in the browser a sealed picture reads with the right password, says "this password doesn't open
+  it" with a wrong one (stops after the first real mark instead of retrying) and "needs a password" with none.
+
+Limits, stated plainly: anyone can tell a picture carries a TrustMark mark (the bits are public; only the text
+is secret). A stolen picture can be attacked offline: each password guess costs one PBKDF2 run and the tag
+filters wrong ones, so only a strong password protects 6 characters. The 9-bit nonce means two marks made
+with the same password share a keystream 1 time in 512, so use a new password per picture for anything real.
+
 ## Browser-sized models (ONNX)
 
 `python onnx_export.py` builds the reader models into `models/` (git-ignored; `pip install onnx onnxruntime`

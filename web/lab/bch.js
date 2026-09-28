@@ -1,4 +1,5 @@
-// TrustMark payload decoder: BCH_5 error correction (up to 5 wrong bits) and 7-bit ASCII text.
+// TrustMark payload decoder: BCH_5 error correction (up to 5 wrong bits); plain 7-bit ASCII text for marks
+// made without a password (tmseal.js opens the others).
 // Written from Adobe's Python reference (trustmark/bchecc.py + datalayer.py, MIT), which follows the Linux
 // kernel BCH layout: 61 data bits padded to 64, then 35 check bits; codeword c(x) = data(x)·x^35 + ecc(x),
 // first bit = highest power. Field GF(2^7), polynomial x^7 + x^3 + 1 (137).
@@ -11,8 +12,9 @@ for (let i = 0, x = 1; i < N; i++) {
 }
 const mul = (a, b) => (a && b ? EXP[LOG[a] + LOG[b]] : 0);
 
-// bits: 100 booleans from the decoder model (logit > 0). Returns the text, or null if it isn't a valid mark.
-export function decodePayload(bits) {
+// bits: 100 booleans from the decoder model (logit > 0). Returns the 61 corrected data bits as a "0101…"
+// string, or null if they aren't a BCH_5 codeword within 5 errors.
+export function correct(bits) {
   // Bits 96–99 name the schema (0001 = BCH_5). No ECC covers them and we only write BCH_5, so they're
   // ignored: checking them rejected ~9% of good reads whose flipped bits landed there.
   if (bits.length !== 100) return null;
@@ -48,13 +50,18 @@ export function decodePayload(bits) {
     if (found.length !== L) return null;  // more errors than the code can fix
     for (const k of found) r[k] ^= 1;
   }
+  if (r[61] || r[62] || r[63]) return null;  // padding is sent as 0, so a "fix" there is a miscorrection
+  return r.slice(0, DATA).join("");
+}
 
-  // Many tries (boxes × nudges × rotations) let random bits pass BCH now and then, so demand what a real
-  // mark of up to 8 characters has: bits 56–63 zero and printable ASCII. ponytail: stopgap, the password
-  // layer's check value replaces it.
-  if (r.slice(56, 64).some(v => v)) return null;
+// Plain (no password) marks: 8 characters of 7-bit ASCII. Many tries (boxes × nudges × rotations) let random
+// bits pass BCH now and then, so demand what a real mark has: bits 56–60 zero and printable ASCII. Sealed
+// marks don't need this: their tag rejects random bits.
+export function decodePayload(bits) {
+  const r = correct(bits);
+  if (r === null || r.slice(56).includes("1")) return null;
   let text = "";
-  for (let i = 0; i < 56; i += 7) text += String.fromCharCode(parseInt(r.slice(i, i + 7).join(""), 2));
+  for (let i = 0; i < 56; i += 7) text += String.fromCharCode(parseInt(r.slice(i, i + 7), 2));
   text = text.replace(/\0+$/, "");
   return /^[\x20-\x7e]+$/.test(text) ? text.trim() : null;
 }
