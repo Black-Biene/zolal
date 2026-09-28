@@ -93,8 +93,11 @@ This is the **first real-camera success**.
 
 1. **Owner runs more TrustMark tests** (`python tm_test.py read ...`): distance, ~30° angle, sent through
    Telegram as a normal photo, the white diagram (+ check `out/*-compare.png` for visibility), print.
-2. **Owner sends model sizes:** `ls -lh venv/lib/python3.14/site-packages/trustmark/models/` (the detector took
-   95 s to download; size decides whether the web page can load it).
+2. ~~Model sizes~~ done: `research/ai-watermarks/onnx_export.py` builds ONNX reader models; smallest working
+   pair is int8 detector (42 MB) + Adobe's fp16 decoder (47 MB) = 89 MB. See that folder's README.
+   **Browser reader works on the iPhone:** `web/lab/tm.html` (models in git-ignored `web/lab/models/`, serve
+   locally with `.claude/launch.json`) read a fresh camera shot in ~4.5 s. Deploying it needs a way to ship the
+   models (proposal: the Pages workflow downloads them instead of committing them).
 3. If TrustMark holds up: run it in the browser with ONNX Runtime Web (Adobe ships ONNX models for its JS/Rust
    ports), vendor the models into `web/` (MIT allows it), and design a compact password layer (61 bits leaves
    ~5–6 characters after a check; e.g. Argon2id-derived keystream + short check value).

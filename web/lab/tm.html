@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'wasm-unsafe-eval';
+  style-src 'self'; img-src 'self' blob:; connect-src 'self'; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="no-referrer">
+<meta name="color-scheme" content="light">
+<meta name="robots" content="noindex">
+<title>Zolal Lab — TrustMark reader</title>
+<link rel="icon" href="../icon-32.png" sizes="32x32" type="image/png">
+<link rel="stylesheet" href="../style.css?v=dev">
+<link rel="stylesheet" href="lab.css?v=dev">
+
+<header class="brand">
+  <img class="logo" src="../icon-180.png" alt="" width="44" height="44">
+  <div>
+    <h1>Zolal Lab</h1>
+    <p>TrustMark reader test: runs Adobe's watermark models on this phone.</p>
+  </div>
+</header>
+
+<main class="card">
+  <p class="lab-note"><strong>Experiment.</strong> Reads pictures marked with <code>tm_test.py mark</code>. The
+  first read downloads the models (90–130 MB) and runs everything on this device.</p>
+
+  <p class="actions-row">
+    <label class="again file-button">Take photo<input id="shoot" type="file" accept="image/*" capture="environment"></label>
+    <label class="again file-button">Choose image<input id="pick" type="file" accept="image/*"></label>
+  </p>
+  <p class="hint">
+    <label>Detector <select id="det">
+      <option value="detector_Q_fp16w.onnx">fp16, 83 MB (faster)</option>
+      <option value="detector_Q_int8.onnx">int8, 42 MB (smaller)</option>
+    </select></label>
+    <label>Size <select id="side">
+      <option>640</option><option>1024</option><option>1600</option>
+    </select> px</label>
+  </p>
+  <p class="hint">Scan it like a QR code: hold the phone close, so the picture fills most of the photo.</p>
+  <div id="status" class="status" role="status" aria-live="polite"></div>
+  <canvas id="crop" class="preview" width="256" height="256" hidden></canvas>
+  <pre id="log" class="hint"></pre>
+  <p class="hint"><a href="./">← Back to the camera lab</a></p>
+</main>
+
+<script type="module" src="tm.js?v=dev"></script>
+</html>
