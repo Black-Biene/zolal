@@ -84,6 +84,10 @@ const MAX_SECTION_ENTRIES: u64 = 64;
 const MAX_CANDIDATES: usize = 4;
 /// A classic cross-reference entry is exactly 20 bytes.
 const TABLE_ENTRY: u64 = 20;
+/// Subsections we will walk in one classic table. Real files have one per run of object numbers,
+/// a handful to a few thousand; this only stops a crafted file from making us read it 64 bytes
+/// at a time, header after empty header.
+const MAX_SUBSECTIONS: u32 = 65_536;
 /// Classic tables store offsets as 10 digits, so they cannot address beyond this.
 const MAX_TABLE_OFFSET: u64 = 9_999_999_999;
 /// Bytes we write between the payload and the cross-reference section.
@@ -448,7 +452,12 @@ fn table_section(
     let mut pos = offset + 4; // past "xref"
     let mut entries = Vec::new();
     let mut total = 0u64;
+    let mut subsections = 0u32;
     let trailer_at = loop {
+        subsections += 1;
+        if subsections > MAX_SUBSECTIONS {
+            return Err(malformed("too many cross-reference subsections"));
+        }
         let win = read_at(src, pos, 64)?;
         let i = skip_ws(&win, 0);
         if win[i..].starts_with(b"trailer") {
@@ -468,14 +477,18 @@ fn table_section(
             j += 1;
         }
         let entries_start = pos + j as u64;
-        let span = count
+        // Checked: release builds have no overflow checks, and a wrapped sum once sent `pos`
+        // back to this same header, looping forever before any passphrase was asked for.
+        let entries_end = count
             .checked_mul(TABLE_ENTRY)
+            .and_then(|span| entries_start.checked_add(span))
             .ok_or_else(|| malformed("absurd subsection size"))?;
-        if entries_start + span > file_len {
+        if entries_end > file_len {
             return Err(malformed(
                 "cross-reference table runs past the end of the file",
             ));
         }
+        let span = entries_end - entries_start;
 
         total = total.saturating_add(count);
         if want_entries && total <= MAX_SECTION_ENTRIES {
@@ -488,13 +501,16 @@ fn table_section(
                 };
                 // "oooooooooo ggggg n\r\n": the type character sits at index 17.
                 if entry[17] == b'n' {
-                    if let Some(at) = ascii_uint(&entry[0..10]) {
-                        entries.push((first + k, at));
+                    if let (Some(at), Some(number)) =
+                        (ascii_uint(&entry[0..10]), first.checked_add(k))
+                    {
+                        entries.push((number, at));
                     }
                 }
             }
         }
-        pos = entries_start + span;
+        // Every pass consumes at least the header's digits, so `pos` only moves forward.
+        pos = entries_end;
     };
 
     let dict = dict_at(src, trailer_at, file_len)?;
@@ -551,9 +567,13 @@ fn xref_stream_entries(win: &[u8], body: usize, dict: &[u8]) -> Vec<(u64, u64)> 
     if widths.len() < 3 {
         return Vec::new();
     }
+    // A field wider than 8 bytes cannot hold a u64, and unchecked widths overflowed the stride.
+    if widths[..3].iter().any(|&w| w > 8) {
+        return Vec::new();
+    }
     let (w0, w1, w2) = (widths[0] as usize, widths[1] as usize, widths[2] as usize);
     let stride = w0 + w1 + w2;
-    if stride == 0 || w1 == 0 || w1 > 8 {
+    if w1 == 0 {
         return Vec::new();
     }
     let index = dict_uint_array(dict, b"Index")
@@ -575,8 +595,8 @@ fn xref_stream_entries(win: &[u8], body: usize, dict: &[u8]) -> Vec<(u64, u64)> 
             at += stride;
             // A zero-width type field means type 1 (in use), per the spec's default.
             let kind = if w0 == 0 { 1 } else { be_uint(&row[..w0]) };
-            if kind == 1 {
-                entries.push((first + k, be_uint(&row[w0..w0 + w1])));
+            if let (1, Some(number)) = (kind, first.checked_add(k)) {
+                entries.push((number, be_uint(&row[w0..w0 + w1])));
             }
         }
     }
@@ -622,8 +642,8 @@ fn stream_body(src: &mut dyn ReadSeek, offset: u64, file_len: u64) -> Result<Opt
         return Ok(None);
     };
     let start = offset + body as u64;
-    if start + len > file_len {
-        return Ok(None);
+    if start.checked_add(len).is_none_or(|end| end > file_len) {
+        return Ok(None); // an attacker's /Length could wrap the sum
     }
     Ok(Some((start, len)))
 }
@@ -645,7 +665,8 @@ fn stream_start(win: &[u8], from: usize) -> Option<usize> {
 
 /// Read the dictionary starting at `offset`.
 fn dict_at(src: &mut dyn ReadSeek, offset: u64, file_len: u64) -> Result<Vec<u8>> {
-    let win = read_at(src, offset, MAX_READ.min(file_len - offset))?;
+    // `trailer` can sit in the last few bytes, putting `offset` just past the end
+    let win = read_at(src, offset, MAX_READ.min(file_len.saturating_sub(offset)))?;
     let (ds, de) = dict_span(&win, 0).ok_or_else(|| malformed("trailer has no dictionary"))?;
     Ok(win[ds..de].to_vec())
 }
@@ -1267,6 +1288,29 @@ mod tests {
             try_regions(junk),
             Err(ZolalError::MalformedContainer { .. })
         ));
+    }
+
+    #[test]
+    fn a_wrapping_subsection_count_errors_instead_of_looping() {
+        // 922337203685477579 entries span 2^64 - 36 bytes; the header line is 36 bytes long, so
+        // an unchecked `entries_start + span` wraps back to the header, and release builds (no
+        // overflow checks) parsed it forever.
+        let pdf = b"%PDF-1.7\nxref\n0 922337203685477579              \ntrailer\n<<>>\nstartxref\n9\n%%EOF\n";
+        assert!(matches!(
+            PdfCarrier.candidate_regions(&mut Cursor::new(pdf.to_vec())),
+            Err(ZolalError::MalformedContainer { .. })
+        ));
+    }
+
+    #[test]
+    fn absurd_xref_stream_field_widths_are_ignored() {
+        // A /W width near u64::MAX overflowed the row stride, then sliced out of bounds.
+        let pdf =
+            b"%PDF-1.7\n1 0 obj\n<< /Type /XRef /W [18446744073709551615 1 1] /Size 1 /Prev 0 >>\n\
+            stream\n\x01\x01\x01\nendstream\nendobj\nstartxref\n9\n%%EOF\n";
+        assert!(PdfCarrier
+            .candidate_regions(&mut Cursor::new(pdf.to_vec()))
+            .is_ok_and(|r| r.is_empty()));
     }
 
     #[test]
