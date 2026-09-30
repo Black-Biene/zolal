@@ -1,18 +1,22 @@
 """Password layer for a TrustMark payload: nonce (9) | ciphertext | tag (16) | zero padding.
 
 The text is 6-bit characters from ALPHABET: a single mark's 61 bits hold 6, a four-quarter mark's 219 bits
-hold 32. K = PBKDF2-SHA256(password, "zolal-tm1" + nonce, 600k rounds); the keystream is HMAC(K, "enc") and
-the tag HMAC(K, "tag" + nonce|ciphertext), truncated. The tag rejects a wrong password and random reads that
-happen to pass BCH (1 in 65536). web/lab/tmseal.js is the browser twin; `python tmseal.py` checks this file.
+hold 32. K = Argon2id(password, salt "zolal-tm2" + nonce), with the Rust engine's settings (48 MiB, 3 passes,
+1 lane, 32 bytes); the keystream is HMAC(K, "enc") and the tag HMAC(K, "tag" + nonce|ciphertext), truncated.
+The tag rejects a wrong password and random reads that happen to pass BCH (1 in 65536). "zolal-tm2" names
+this format; tm1 (PBKDF2) marks were test marks only and no longer open. web/lab/tmseal.js is the browser
+twin; `python tmseal.py` checks this file. Needs: pip install argon2-cffi
 """
-import hashlib
 import hmac
 import secrets
 import unicodedata
 
+from argon2.low_level import Type, hash_secret_raw
+
 ALPHABET = " abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789."
 NONCE, TAG = 9, 16
-ROUNDS = 600_000
+# the engine's Argon2id settings (crates/zolal-core/src/crypto/kdf.rs)
+ARGON2 = dict(time_cost=3, memory_cost=48 * 1024, parallelism=1, hash_len=32, type=Type.ID)
 
 
 def capacity(bits):
@@ -30,7 +34,7 @@ def _bits(data, n):
 
 def _key(password, nonce):
     pw = unicodedata.normalize("NFC", password).encode()
-    return hashlib.pbkdf2_hmac("sha256", pw, b"zolal-tm1" + _pack(nonce), ROUNDS)
+    return hash_secret_raw(pw, b"zolal-tm2" + _pack(nonce), **ARGON2)
 
 
 def _tag(k, nonce, ct):

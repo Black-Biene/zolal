@@ -10,7 +10,7 @@ the model files download on first use.
 ```bash
 cd research/ai-watermarks
 python3 -m venv venv && source venv/bin/activate
-pip install trustmark pillow numpy      # also installs PyTorch (a large download, CPU is fine)
+pip install trustmark pillow numpy argon2-cffi   # also installs PyTorch (a large download, CPU is fine)
 ```
 
 ## Test
@@ -50,8 +50,12 @@ Still to test: distance, angle, a picture sent through Telegram as a normal phot
 in the page, which has a password field). The 61 bits: nonce 9 | ciphertext 36 | tag 16.
 
 - Text: up to 6 characters of `a–z A–Z 0–9 space .` (6 bits each).
-- Key: PBKDF2-SHA256, 600,000 rounds, salt `zolal-tm1` + nonce (built into WebCrypto and Python, no extra
-  library; the main site's Argon2id would need one on both sides). Keystream and tag: HMAC-SHA256 with that key.
+- Key: **Argon2id with the Rust engine's settings** (48 MiB, 3 passes, 1 lane, 32 bytes), salt `zolal-tm2` +
+  nonce: `argon2-cffi` in Python, the vendored `hash-wasm` in the browser (WebCrypto has no Argon2). Keystream
+  and tag: HMAC-SHA256 with that key. Until 2026-09-30 this was PBKDF2 (`zolal-tm1`); those test marks no
+  longer open. **The format is frozen from `zolal-tm2` on**: changing it would break every mark people make.
+- Argon2id cost: ~60–70 ms per password try on a MacBook (Python and browser WebAssembly alike). A reveal
+  keeps keys per nonce, so trying several quarter combinations costs one derivation, not one each.
 - Tag: rejects a wrong password, and random bits that happen to pass BCH (1 in 65,536). It replaces the
   printable-ASCII stopgap for sealed marks; marks without a password still read as before.
 - Checked: 40 Python-sealed payloads open in JS (incl. Persian and accented passwords), 40 wrong passwords
@@ -59,8 +63,9 @@ in the page, which has a password field). The 61 bits: nonce 9 | ciphertext 36 |
   it" with a wrong one (stops after the first real mark instead of retrying) and "needs a password" with none.
 
 Limits, stated plainly: anyone can tell a picture carries a TrustMark mark (the bits are public; only the text
-is secret). A stolen picture can be attacked offline: each password guess costs one PBKDF2 run and the tag
-filters wrong ones, so only a strong password protects 6 characters. The 9-bit nonce means two marks made
+is secret). A stolen picture can be attacked offline: each password guess costs one Argon2id run (memory-hard,
+so far slower on GPUs than the old PBKDF2) and the tag filters wrong ones, so a short or common password
+(`123456`) still falls; use a long one or a phrase. The 9-bit nonce means two marks made
 with the same password share a keystream 1 time in 512, so use a new password per picture for anything real.
 
 ## Hiding in the browser

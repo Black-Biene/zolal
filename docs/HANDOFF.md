@@ -99,7 +99,7 @@ This is the **first real-camera success**.
    locally with `.claude/launch.json`) read a fresh camera shot in ~4.5 s, and a camera shot sent through
    Telegram. Live at https://black-biene.github.io/zolal/lab/tm.html (linked from the lab page): the Pages
    workflow builds the models with `onnx_export.py` and caches them. Scan close up, like a QR code; distance is
-   not a goal. **Password layer done** (`tmseal.py` / `web/lab/tmseal.js`): 6 characters, PBKDF2 key, 16-bit
+   not a goal. **Password layer done** (`tmseal.py` / `web/lab/tmseal.js`): 6 characters (32 with four quarters), Argon2id key (format `zolal-tm2`, frozen), 16-bit
    tag; mark on the page's *Hide* tab or with `tm_test.py mark PHOTO TEXT PASSWORD`. Details and limits in the
    research README. **Up to 32 characters** with four quarter marks and a spare (research README). Next idea: WebGPU for speed (ORT's webgpu build, ~28 MB), with the CPU path as fallback.
 3. If TrustMark holds up: run it in the browser with ONNX Runtime Web (Adobe ships ONNX models for its JS/Rust

@@ -1,9 +1,11 @@
 // Password layer for a TrustMark payload, browser twin of research/ai-watermarks/tmseal.py (see there for the
 // format): nonce (9) | ciphertext (6-bit characters) | tag (16) | zero padding. A single mark's 61 bits hold
-// 6 characters; a four-quarter mark's 219 bits hold 32. WebCrypto only.
+// 6 characters; a four-quarter mark's 219 bits hold 32. Key: Argon2id with the Rust engine's settings, via the
+// vendored hash-wasm (WebCrypto has no Argon2); HMAC-SHA256 from WebCrypto.
+import "../vendor/hash-wasm/argon2.umd.min.js";  // defines globalThis.hashwasm
 
 export const ALPHABET = " abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.";
-const NONCE = 9, TAG = 16, ROUNDS = 600_000;
+const NONCE = 9, TAG = 16;
 const enc = new TextEncoder(), subtle = crypto.subtle;
 
 // characters that fit in a payload of `bits` bits
@@ -17,11 +19,20 @@ const pack = bits => {  // "0101…" -> bytes, MSB first, zero-padded
 const bitsOf = (buf, n) => [...new Uint8Array(buf)].map(b => b.toString(2).padStart(8, "0")).join("").slice(0, n);
 const concat = (...parts) => new Uint8Array(parts.flatMap(p => [...p]));
 
-async function hmacKey(password, nonce) {
-  const pw = await subtle.importKey("raw", enc.encode(password.normalize("NFC")), "PBKDF2", false, ["deriveBits"]);
-  const k = await subtle.deriveBits(
-    { name: "PBKDF2", hash: "SHA-256", salt: concat(enc.encode("zolal-tm1"), pack(nonce)), iterations: ROUNDS }, pw, 256);
-  return subtle.importKey("raw", k, { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+// "zolal-tm2" names this format (tm1 used PBKDF2 and was only ever test marks). The settings are the engine's
+// (crates/zolal-core/src/crypto/kdf.rs): 48 MiB, 3 passes, 1 lane, 32 bytes.
+// A reveal can try several payloads with the same nonce, and Argon2id is the slow step, so keys are kept per
+// password and nonce for the life of the page.
+const keys = new Map();
+function hmacKey(password, nonce) {
+  const id = password + "\u0000" + nonce;
+  if (!keys.has(id)) {
+    keys.set(id, globalThis.hashwasm.argon2id({
+      password: enc.encode(password.normalize("NFC")), salt: concat(enc.encode("zolal-tm2"), pack(nonce)),
+      parallelism: 1, iterations: 3, memorySize: 48 * 1024, hashLength: 32, outputType: "binary",
+    }).then(k => subtle.importKey("raw", k, { name: "HMAC", hash: "SHA-256" }, false, ["sign"])));
+  }
+  return keys.get(id);
 }
 const mac = (key, ...parts) => subtle.sign("HMAC", key, concat(...parts));
 
