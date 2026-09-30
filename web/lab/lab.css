@@ -30,3 +30,16 @@
 /* a thin dark frame right around the picture so its edges are clear whatever its colours */
 .fullscreen canvas { max-width: 86vw; max-height: 86vh; width: auto; height: auto; outline: max(3px, .5vmin) solid #333; outline-offset: 0 }
 .fullscreen[hidden] { display: none }
+.load { margin: 0 0 14px }
+.load progress { display: block; width: 100%; height: 8px; margin-bottom: 4px; accent-color: var(--accent) }
+.load .hint { margin: 0 }
+.count-bad { color: var(--err, #b42318) }
+.thumb { max-height: 240px; width: auto; max-width: 100% }
+.settings { margin: 12px 0 }
+.settings label { margin-right: 12px }
+/* the text and password boxes, styled like the main page's */
+#m-text, #m-pw, #pw {
+  display: block; width: 100%; padding: 10px 12px; font: inherit; color: var(--ink);
+  border: 1px solid #cbd5e1; border-radius: 10px; background: var(--card);
+}
+#m-text:focus, #m-pw:focus, #pw:focus { outline: 0; border-color: var(--accent); box-shadow: 0 0 0 3px rgb(10 79 140 / .18) }

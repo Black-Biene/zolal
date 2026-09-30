@@ -16,7 +16,10 @@ self.addEventListener("activate", e => e.waitUntil(caches.keys()
   .then(() => self.clients.claim())));
 
 self.addEventListener("fetch", e => {
-  if (e.request.method !== "GET" || new URL(e.request.url).origin !== location.origin) return;
+  const url = new URL(e.request.url);
+  // The lab's ~150 MB of models keep their own versioned cache (lab/tm.js); copying them into this
+  // per-deploy cache would store them twice and fetch them again on every deploy.
+  if (e.request.method !== "GET" || url.origin !== location.origin || url.pathname.includes("/lab/models/")) return;
   e.respondWith(fetch(e.request).then(res => {
     if (res.ok) { const copy = res.clone(); caches.open(CACHE).then(c => c.put(e.request, copy)); }
     return res;
