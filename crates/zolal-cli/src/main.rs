@@ -225,8 +225,13 @@ fn cmd_clean(raw: &[String]) -> CliResult {
     progress.finish();
     let report = report?;
 
+    let wiped = if report.wiped_bytes > 0 {
+        format!(", wiped {} in place", human(report.wiped_bytes))
+    } else {
+        String::new()
+    };
     println!(
-        "removed {} (found via {:?}); {output} is now {}",
+        "removed {}{wiped} (found via {:?}); {output} is now {}",
         human(report.removed_bytes),
         report.technique,
         human(report.output_size)

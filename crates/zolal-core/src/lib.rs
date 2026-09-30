@@ -352,6 +352,9 @@ pub struct CleanReport {
     pub output_size: u64,
     /// How many bytes the carrier shed.
     pub removed_bytes: u64,
+    /// Bytes of hidden content overwritten with zeros in place, because cutting them out would
+    /// have broken the file (e.g. an MP4 `free` box that is no longer the last box).
+    pub wiped_bytes: u64,
     /// Where the payload had been.
     pub technique: Technique,
 }
@@ -395,7 +398,7 @@ pub fn clean(req: CleanRequest, progress: &dyn Progress) -> Result<CleanReport> 
             let src = carrier.open_region(&mut file, region)?;
             match OpenReader::new(src, region.len, &req.passphrase, params, progress) {
                 Ok(_) => {
-                    found = Some(region.technique);
+                    found = Some((region.technique, params));
                     break 'search;
                 }
                 Err(ZolalError::WrongPassphrase) => continue,
@@ -403,7 +406,7 @@ pub fn clean(req: CleanRequest, progress: &dyn Progress) -> Result<CleanReport> 
             }
         }
     }
-    let Some(technique) = found else {
+    let Some((technique, params)) = found else {
         return Err(ZolalError::WrongPassphrase);
     };
 
@@ -416,13 +419,76 @@ pub fn clean(req: CleanRequest, progress: &dyn Progress) -> Result<CleanReport> 
             .into_inner()
             .map_err(io::IntoInnerError::into_error)?;
     }
+
+    // `strip` cuts what the format's structure says is ours, which is not always the region that
+    // authenticated above: an MP4 `free` box that another tool has since appended a box after is
+    // still revealable, but no longer trailing padding. So check the result with the same key,
+    // and overwrite anything that still opens with zeros, in place: offsets stay valid and the
+    // container stays well formed (a `free` box or stream body of zeros). Never report "clean"
+    // while something still opens.
+    let mut wiped_bytes = 0;
+    for _ in 0..=MAX_WIPES {
+        let mut check = File::open(&out.path)?;
+        let Some(left) =
+            first_authenticating(carrier, &mut check, &req.passphrase, params, progress)?
+        else {
+            break;
+        };
+        if left.fragmented {
+            return Err(ZolalError::InvalidRequest(
+                "hidden content sits where cleaning cannot remove it; nothing was written".into(),
+            ));
+        }
+        zero_range(&mut out.file, left.offset, left.len)?;
+        wiped_bytes += left.len;
+    }
+    let mut check = File::open(&out.path)?;
+    if first_authenticating(carrier, &mut check, &req.passphrase, params, progress)?.is_some() {
+        return Err(ZolalError::InvalidRequest(
+            "hidden content survived cleaning; nothing was written".into(),
+        ));
+    }
     let output_size = out.commit(&req.output)?;
 
     Ok(CleanReport {
         output_size,
         removed_bytes: carrier_size.saturating_sub(output_size),
+        wiped_bytes,
         technique,
     })
+}
+
+/// Regions `clean` will wipe in place before giving up. A carrier holds one region of ours; more
+/// than a few that open with the same key means something is wrong, not more work to do.
+const MAX_WIPES: usize = 4;
+
+/// The first candidate region of `src` that opens with this passphrase and these KDF parameters.
+fn first_authenticating(
+    carrier: &dyn Carrier,
+    src: &mut File,
+    passphrase: &SecretString,
+    params: KdfParams,
+    progress: &dyn Progress,
+) -> Result<Option<carrier::Region>> {
+    for region in carrier.candidate_regions(src)? {
+        if region.len < MIN_REGION_LEN {
+            continue;
+        }
+        let reader = carrier.open_region(src, &region)?;
+        match OpenReader::new(reader, region.len, passphrase, params, progress) {
+            Ok(_) => return Ok(Some(region)),
+            Err(ZolalError::WrongPassphrase) => continue,
+            Err(e) => return Err(e),
+        }
+    }
+    Ok(None)
+}
+
+/// Overwrite `len` bytes at `offset` with zeros.
+fn zero_range(file: &mut File, offset: u64, len: u64) -> Result<()> {
+    file.seek(SeekFrom::Start(offset))?;
+    io::copy(&mut io::repeat(0).take(len), file)?;
+    Ok(())
 }
 
 /// Recover hidden files from `carrier` into `output_dir`.

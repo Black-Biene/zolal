@@ -269,6 +269,39 @@ fn cleaning_restores_a_pdf() {
 }
 
 #[test]
+fn cleaning_an_mp4_whose_box_is_no_longer_last_still_removes_it() {
+    // Another tool appended a box after ours, so our `free` box is interior: reveal still finds
+    // it, but stripping only drops *trailing* padding. Clean must not report success and leave it.
+    let env = Env::new();
+    let carrier_bytes = synth_mp4();
+    let tracks = mp4_tracks(&carrier_bytes);
+    let carrier = env.write("carrier.mp4", &carrier_bytes);
+    let payload = env.write("in/secret.bin", &payload_bytes(4096, 11));
+    env.hide(&carrier, &[payload], "stego.mp4", Technique::Mp4FreeBox)
+        .unwrap();
+    let mut stego = fs::read(env.path("stego.mp4")).unwrap();
+    stego.extend_from_slice(&[
+        0, 0, 0, 16, b'u', b'd', b't', b'a', 0, 0, 0, 8, b'x', b'y', b'z', b'w',
+    ]);
+    let stego = env.write("appended.mp4", &stego);
+    env.reveal(&stego, "before", PASS)
+        .expect("the interior box is still revealable");
+
+    let report = env.clean(&stego, "clean.mp4", PASS).unwrap();
+    let after = env.reveal(&env.path("clean.mp4"), "after", PASS);
+    assert!(
+        matches!(
+            after,
+            Err(ZolalError::NoHiddenData { .. } | ZolalError::WrongPassphrase)
+        ),
+        "the payload survived cleaning: {after:?}"
+    );
+    assert!(report.wiped_bytes > 0, "nothing was wiped: {report:?}");
+    let cleaned = fs::read(env.path("clean.mp4")).unwrap();
+    assert_eq!(mp4_tracks(&cleaned), tracks, "cleaned MP4 lost its tracks");
+}
+
+#[test]
 fn cleaning_a_carrier_that_holds_nothing_is_refused_not_silently_copied() {
     let env = Env::new();
     let bytes = synth_jpeg(Style::default());
