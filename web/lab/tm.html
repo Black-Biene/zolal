@@ -44,7 +44,12 @@
         <p class="hint"><input id="m-text" maxlength="32" autocomplete="off" spellcheck="false"
         placeholder="come to lingen at 6pm" aria-describedby="m-count"></p>
         <p class="hint" id="m-count" aria-live="polite"></p>
-        <p class="hint"><label><input type="checkbox" id="m-print"> Stronger mark for printing (strength 1.5)</label></p>
+        <p class="hint"><label>Strength <select id="m-strength">
+          <option value="1">1.0: screens and chat apps</option>
+          <option value="1.5">1.5: printing (Adobe's advice)</option>
+          <option value="2">2.0: harsh printers</option>
+          <option value="2.5">2.5: test only (visible)</option>
+        </select></label></p>
         <p class="hint"><input id="m-pw" type="password" autocomplete="new-password" placeholder="password"></p>
       </li>
     </ol>

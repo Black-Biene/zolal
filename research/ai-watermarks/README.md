@@ -128,7 +128,16 @@ A lake photo marked with a 5-character text (one BCH_5 mark, strength 1.0), prin
   all stay at ~19–21 wrong bits.
 - Adobe's FAQ: raising WM_STRENGTH from 1.0 to 1.5 "is sufficient to have TrustMark survive printing to
   paper". Cost: ~3.4 dB PSNR (40.0 -> 36.7 dB with Adobe's encoder, 39.4 -> 35.7 dB in the browser). The page
-  now offers **Stronger mark for printing** (strength 1.5); not yet tested with a real print.
+  now offers **Stronger mark for printing** (strength 1.5).
+- **Strength 1.5, printed** (same lake, text `note2`, one BCH_5 mark): better but at the edge. Straightened
+  from hand-read corners: median 13 wrong bits (was ~20), best 3; 7 of 6561 corner guesses decode. The page
+  still found nothing: its crops are rectangles and can't undo the slight angle.
+- Tried on that print, none reliable: a corner search guided by the decoder's confidence (mean |logit|,
+  correlation -0.48 with wrong bits) stops at ~9 wrong bits; averaging the most confident crops gets to 6;
+  Chase-style soft decoding (flip subsets of the 12 least certain bits) opens 7 of 40 rough crops but needs up
+  to 41 password checks each, and combined with the search still missed, after 56 password checks.
+- Visibility by strength (Adobe's encoder, ramen photo): 1.0 40.0 dB, 1.5 36.7, 2.0 34.2, 2.5 32.4. The lab now
+  has a strength choice (1.0/1.5/2.0/2.5) to test one print at several strengths.
 
 ## Browser-sized models (ONNX)
 
