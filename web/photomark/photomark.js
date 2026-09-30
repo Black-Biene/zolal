@@ -198,7 +198,12 @@ export async function hideText(source, text, password, { onStatus = () => {} } =
   const bmp = await bitmap(source);
   const s = Math.min(1, Math.sqrt(MAX_PIXELS / (bmp.width * bmp.height)));
   const W = Math.round(bmp.width * s), H = Math.round(bmp.height * s);
-  const full = draw(bmp, W, H), g = full.getContext("2d"), img = g.getImageData(0, 0, W, H), px = img.data;
+  // on white: transparent areas (a PNG floor plan, say) would otherwise turn black in the JPEG
+  const full = Object.assign(document.createElement("canvas"), { width: W, height: H });
+  const g = full.getContext("2d", { willReadFrequently: true });
+  g.fillStyle = "#fff"; g.fillRect(0, 0, W, H);
+  g.imageSmoothingQuality = "high"; g.drawImage(bmp, 0, 0, W, H);
+  const img = g.getImageData(0, 0, W, H), px = img.data;
 
   // TrustMark marks the whole photo, or only a centred square when it's wider than 2:1
   const side = Math.min(W, H), square = Math.max(W, H) / side > 2;
@@ -257,7 +262,7 @@ async function detect(det, img, side, [x, y, w, h] = [0, 0, img.width, img.heigh
 const WHOLE = [0, 0.01, 0.02, -0.01].flatMap(g => [[0, 0], [0, .01], [0, -.01], [.01, 0], [-.01, 0]].map(([x, y]) => [g, x, y]));
 const QUARTER = [[0, 0, 0], [.02, 0, 0], [-.02, 0, 0], [.02, .02, 0], [.02, -.02, 0], [.02, 0, .02], [.02, 0, -.02],
   [.04, 0, 0], [0, .02, 0], [0, -.02, 0], [0, 0, .02], [0, 0, -.02]];
-const MAX_DECODES = 300;  // per rotation: ~75 s on a phone when nothing is there
+const MAX_DECODES = 300;  // per reveal, all turns together: ~75 s on a phone when nothing is there
 
 // Decode `rect` of ctx.img with each nudge until check(bits, crop) returns something other than undefined.
 async function scan(ctx, [x1, y1, x2, y2], nudges, check) {
@@ -276,9 +281,7 @@ async function scan(ctx, [x1, y1, x2, y2], nudges, check) {
 // Nudged crops keep yielding the same payload, and the password check is the slow step: run it once each.
 async function open(ctx, data) {
   if (!ctx.opened.has(data)) ctx.opened.set(data, await openSealed(data, ctx.password));
-  const text = ctx.opened.get(data);
-  if (text === null) ctx.locked = true;
-  return text;
+  return ctx.opened.get(data);
 }
 
 // A single mark: with a password only sealed marks count (their tag rejects random bits); without one, plain
@@ -290,7 +293,8 @@ async function checkWhole(ctx, bits, crop) {
     if (text === null && correct(bits) !== null) ctx.locked = true;
   } else {
     const data = correct(bits);
-    if (data !== null) text = await open(ctx, data);
+    // BCH_5 lets a random word through about once in 100,000 tries, so one that passes is a real mark
+    if (data !== null && (text = await open(ctx, data)) === null) ctx.locked = true;
   }
   if (text !== null) { ctx.onCrop(crop); return text; }
   if (ctx.locked) return null;  // a real mark that doesn't open: other crops would give the same bits
@@ -298,6 +302,10 @@ async function checkWhole(ctx, bits, crop) {
 
 // A quarter: BCH_3 lets ~8% of random words through, so each index can collect wrong chunks too. Every mix of
 // three indices (0–2, or two of them plus the XOR quarter 3) is tried; the tag picks the right one.
+// A mix that doesn't open says nothing on its own: random chunks never open. Only four quarters whose XOR
+// checks out (73 bits can't match by chance) prove a real mark, and only then is the password to blame. A
+// printout photographed from a plain page once collected dozens of random "quarters" and was reported as a
+// wrong password.
 async function checkQuarter(ctx, bits) {
   const data = correct(bits, 3);
   if (data === null) return;
@@ -306,18 +314,21 @@ async function checkQuarter(ctx, bits) {
   ctx.quads[k].add(chunk);
   ctx.onLog(`  quarter ${k} read (${ctx.decodes} decodes so far)`);
   if (ctx.quads.filter(q => q.size).length < 3) return true;
-  if (!ctx.password) { ctx.locked = true; return null; }
   const [q0, q1, q2, q3] = ctx.quads.map(q => [...q].slice(-4));  // newest few per index keeps this small
-  const payloads = new Set();
-  for (const a of q0) for (const b of q1) for (const c of q2) payloads.add(a + b + c);
-  for (const d of q3) {
-    for (const b of q1) for (const c of q2) payloads.add(xor(d, b, c) + b + c);
-    for (const a of q0) for (const c of q2) payloads.add(a + xor(d, a, c) + c);
-    for (const a of q0) for (const b of q1) payloads.add(a + b + xor(d, a, b));
+  if (ctx.password) {
+    const payloads = new Set();
+    for (const a of q0) for (const b of q1) for (const c of q2) payloads.add(a + b + c);
+    for (const d of q3) {
+      for (const b of q1) for (const c of q2) payloads.add(xor(d, b, c) + b + c);
+      for (const a of q0) for (const c of q2) payloads.add(a + xor(d, a, c) + c);
+      for (const a of q0) for (const b of q1) payloads.add(a + b + xor(d, a, b));
+    }
+    for (const p of payloads) { const text = await open(ctx, p); if (text !== null) return text; }
   }
-  for (const p of payloads) { const text = await open(ctx, p); if (text !== null) return text; }
-  // four quarters whose XOR checks out (73 bits can't match by chance) are the real mark: the password is wrong
-  if (q0.some(a => q1.some(b => q2.some(c => q3.includes(xor(a, b, c)))))) { ctx.sure = true; return null; }
+  if (q0.some(a => q1.some(b => q2.some(c => q3.includes(xor(a, b, c)))))) {
+    ctx.sure = ctx.locked = true;
+    return null;
+  }
   return true;
 }
 
@@ -335,29 +346,40 @@ export async function revealText(source, password, {
   const bmp = await bitmap(source);
   onLog(`photo: ${bmp.width}×${bmp.height}`);
   const det = await model(detector), dec = await model(DECODER);
-  const ctx = { dec, password, locked: false, sure: false, opened: new Map(), onLog, onCrop };
+  const ctx = { dec, password, locked: false, sure: false, opened: new Map(), onLog, onCrop, decodes: 0 };
 
-  for (let q = 0; q < 4; q++) {  // like TrustMark's ROTATION: try 0°, 90°, 180°, 270°
+  // Like TrustMark's ROTATION, the photo may be sideways (a landscape print shot in portrait, say). An upright
+  // view that clearly finds the picture is read at once; otherwise every turn is scored first and the best
+  // is read first, all sharing one budget of MAX_DECODES, so a photo with no mark fails in about a minute on a
+  // phone instead of five.
+  const views = [];
+  for (let q = 0; q < 4; q++) {
     const img = rotated(bmp, q);
-    Object.assign(ctx, { img, decodes: 0, quads: [0, 1, 2, 3].map(() => new Set()) });
     onStatus(`Looking for the picture${q ? ` (turned ${q * 90}°)` : ""}…`); await tick();
-    let t = performance.now();
+    const t = performance.now();
     const found = (await detect(det, img, side)).filter((f, i) => !i || f.score >= 0.1);
     onLog(`${q * 90}°: detector ${ms(t)}, ${found.length} box(es) ${found.map(f => f.score.toFixed(2)).join(" ")}`);
-    if (!found.length) continue;
+    if (found.length) views.push({ q, img, found });
+    if (!q && found[0]?.score >= 0.9) break;
+  }
+  views.sort((a, b) => b.found[0].score - a.found[0].score);
+
+  for (const { q, img, found } of views) {
+    Object.assign(ctx, { img, quads: [0, 1, 2, 3].map(() => new Set()) });
 
     // Zoom: in a shot where the picture is smaller, the box can be ~20% loose. Detecting again inside the
     // top box plus a 10% margin, where the picture fills the view, gives edges tight enough to decode.
     const [x1, y1, x2, y2] = found[0].box, mw = 0.1 * (x2 - x1), mh = 0.1 * (y2 - y1);
     const zx = Math.max(0, x1 - mw), zy = Math.max(0, y1 - mh);
     onStatus("Zooming in on the picture…"); await tick();
-    t = performance.now();
+    let t = performance.now();
     const zoomed = await detect(det, img, side, [zx, zy, Math.min(img.width, x2 + mw) - zx, Math.min(img.height, y2 + mh) - zy]);
-    onLog(`  zoomed: ${ms(t)}, top box [${zoomed[0] ? fmt(zoomed[0].box, img) : "none"}]`);
+    onLog(`${q * 90}° zoomed: ${ms(t)}, top box [${zoomed[0] ? fmt(zoomed[0].box, img) : "none"}]`);
     const boxes = [...zoomed.filter((f, i) => !i || f.score >= 0.1), ...found].map(f => f.box);
 
     onStatus("Reading…"); await tick();
     t = performance.now();
+    const before = ctx.decodes;
     // 1. one mark over the whole picture
     let text = await scan(ctx, boxes[0], WHOLE, (b, c) => checkWhole(ctx, b, c));
     if (text) return { text };
@@ -368,16 +390,15 @@ export async function revealText(source, password, {
     for (const rect of [union, ...boxes].flatMap(quartersOf).concat(boxes)) {
       text = await scan(ctx, rect, QUARTER, b => checkQuarter(ctx, b));
       if (typeof text === "string") return { text };
-      if (ctx.decodes >= MAX_DECODES || ctx.sure || (ctx.locked && !ctx.password)) break;
+      if (ctx.decodes >= MAX_DECODES || ctx.locked) break;
     }
     // 3. the detector's own first box, for a single mark
-    if (!ctx.locked && !ctx.sure) {
+    if (!ctx.locked) {
       text = await scan(ctx, found[0].box, WHOLE, (b, c) => checkWhole(ctx, b, c));
       if (text) return { text };
     }
-    onLog(`  ${ctx.decodes} decodes in ${ms(t)}, quarters seen: ${ctx.quads.map((s, k) => s.size ? k : "").join("") || "none"}`);
-    // an upright view that clearly found the picture isn't fixed by turning it; skip the ~40 s of rotations
-    if (ctx.locked || (!q && found[0].score >= 0.9)) break;
+    onLog(`  ${ctx.decodes - before} decodes in ${ms(t)}, quarters seen: ${ctx.quads.map((s, k) => s.size ? k : "").join("") || "none"}`);
+    if (ctx.locked || ctx.decodes >= MAX_DECODES) break;
   }
   return ctx.locked ? { locked: true } : { text: null };
 }

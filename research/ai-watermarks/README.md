@@ -98,6 +98,24 @@ XOR, so any one quarter may be unreadable. Texts of up to 6 characters still use
 - In the browser (MacBook): hiding 32 characters in a 12 MP photo 1.8 s, reads back; a 1200 px JPEG copy
   reveals it after 23 decodes; a wrong password is reported after 24. Single marks (plain and sealed) still read.
 
+## Printed floor plan (2026-09-30)
+
+A PNG floor plan (mostly white, transparent background) marked with an 11-character text, printed, and
+photographed sideways with an iPhone. The marked file read (`play at 6pm`); the photo of the print did not.
+Three findings:
+
+- **Not readable**: 294 decodes found only random "quarters" (BCH_3 passes ~8% of random words), never four
+  that agree. Plain pictures plus printing are the weak case the camera-lab notes already warned about. The
+  main page now says busy photos hold the mark best and drawings or plain pictures may not survive printing.
+  (A "how plain is it" score didn't separate good from bad covers: street photo 33% plain blocks, floor plan
+  46%, so no automatic warning.)
+- **Wrong message, fixed**: every random combination that failed to open counted as "a mark this password
+  doesn't open". Now only four quarters whose XOR checks out (or a BCH_5 single mark) can say that.
+- **Transparent turned black, fixed**: the photo mark drew the PNG without a background; it now fills white
+  first, like the main page's JPEG conversion.
+- **Slow failure, fixed**: with the upright view unclear, all four turns got 300 decodes each (minutes on a
+  phone). Now every turn is scored first, the best is read first, and all share one 300-decode budget.
+
 ## Browser-sized models (ONNX)
 
 `python onnx_export.py` builds the reader models into `models/` (git-ignored; `pip install onnx onnxruntime`
