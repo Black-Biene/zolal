@@ -25,6 +25,9 @@ issue. Email hi@blackbiene.dev instead, and we'll reply and credit you once it's
    cargo deny check
    ```
 
+   GitHub runs the same checks (plus the WebAssembly build) on every pull request; see
+   `.github/workflows/ci.yml`.
+
 4. Open the pull request and say what it changes and why. Link the issue if there is one.
 
 Ground rules that keep the engine safe to use:

@@ -51,6 +51,11 @@ use crate::error::{Result, ZolalError};
 
 /// Largest payload a single APP15 segment can hold: 65 535 minus the 2-byte length field.
 pub const APP15_MAX_PAYLOAD: usize = 65_533;
+/// APP15 segments we will collect. Our own largest hide (the 50 MB JPEG output cap) writes about
+/// 800; a crafted file of empty 4-byte segments is refused instead of growing memory unbounded.
+const MAX_APP15_SEGMENTS: usize = 4096;
+/// Complete images chained after the primary (MPF gain maps, depth maps: a handful in practice).
+const MAX_CHAINED_IMAGES: usize = 256;
 
 /// JPEG start-of-image marker.
 const SOI: [u8; 2] = [0xFF, 0xD8];
@@ -272,12 +277,17 @@ fn scan(src: &mut dyn ReadSeek) -> Result<Layout> {
     let mut image_end = walk_image(&mut w, Some(&mut facts), false)?;
 
     // MPF and friends: complete JPEGs back to back after the primary.
+    let mut chained = 0;
     while w.len - image_end >= 2 {
         let mut head = [0u8; 2];
         w.exact(&mut head)?;
         w.seek_to(image_end)?;
         if head != SOI {
             break;
+        }
+        chained += 1;
+        if chained > MAX_CHAINED_IMAGES {
+            return Err(malformed("too many images chained after the primary"));
         }
         match walk_image(&mut w, None, false) {
             Ok(end) => image_end = end,
@@ -342,6 +352,9 @@ fn walk_image(
                         facts.insert_at = offset + 4 + body;
                     }
                     if marker == M_APP15 {
+                        if facts.app15.len() == MAX_APP15_SEGMENTS {
+                            return Err(malformed("too many APP15 segments"));
+                        }
                         facts.app15.push(Segment {
                             offset,
                             len: body + 4,
@@ -674,6 +687,32 @@ mod tests {
 
     fn layout(bytes: &[u8]) -> Result<Layout> {
         scan(&mut Cursor::new(bytes))
+    }
+
+    #[test]
+    fn a_flood_of_app15_segments_is_refused() {
+        // Each empty APP15 segment is 4 bytes and used to cost a stored entry, unbounded.
+        let bytes = jpeg(&vec![seg(M_APP15, &[]); MAX_APP15_SEGMENTS + 1]);
+        assert!(matches!(
+            layout(&bytes),
+            Err(ZolalError::MalformedContainer { .. })
+        ));
+        // At the limit it is still an ordinary JPEG.
+        let bytes = jpeg(&vec![seg(M_APP15, &[]); MAX_APP15_SEGMENTS]);
+        assert_eq!(layout(&bytes).unwrap().app15.len(), MAX_APP15_SEGMENTS);
+    }
+
+    #[test]
+    fn a_flood_of_chained_images_is_refused() {
+        // 4 bytes (SOI EOI) per "image" after the primary: a cheap way to make the walk long.
+        let mut bytes = jpeg(&[]);
+        for _ in 0..=MAX_CHAINED_IMAGES {
+            bytes.extend_from_slice(&[0xFF, M_SOI, 0xFF, M_EOI]);
+        }
+        assert!(matches!(
+            layout(&bytes),
+            Err(ZolalError::MalformedContainer { .. })
+        ));
     }
 
     #[test]

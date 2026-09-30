@@ -107,7 +107,7 @@ This is the **first real-camera success**.
    ~5–6 characters after a check; e.g. Argon2id-derived keystream + short check value).
 4. Meanwhile, for our own lab method: restore invisibility (lower strength on plain areas, finder gain back
    to 1.0) and state that it suits busy photos only.
-5. Earlier backlog: a CI workflow running fmt/clippy/tests/deny on pull requests; a file-size limit on phones
+5. Earlier backlog (CI workflow, PDF loop, `clean()`, walk limits: done 2026-09-30): a file-size limit on phones
    (the page loads whole files into memory); optionally a "remove hidden content" button (engine has `clean`).
 
 ## Cloud environment notes

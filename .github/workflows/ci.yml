@@ -1,0 +1,20 @@
+name: ci
+# The checks CONTRIBUTING.md asks for, on every push and pull request. rust-toolchain.toml pins
+# the toolchain (with rustfmt, clippy and the wasm32-wasip1 target), so rustup installs it here.
+on: { push: { branches: [main] }, pull_request: {}, workflow_dispatch: {} }
+permissions: { contents: read }
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: cargo fmt --all --check
+      - run: cargo clippy --workspace --all-targets --locked -- -D warnings
+      - run: cargo test --workspace --locked
+      # The web page runs the CLI compiled to WebAssembly; make sure a change still builds there.
+      - run: cargo build --release -p zolal-cli --target wasm32-wasip1 --locked
+  deny:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: EmbarkStudios/cargo-deny-action@v2

@@ -50,6 +50,14 @@ const FREE: &[u8; 4] = b"free";
 /// Also ignorable padding; some tools write this instead of `free`.
 const SKIP: &[u8; 4] = b"skip";
 
+/// Top-level boxes we will walk. Ordinary files have a handful; a fragmented MP4 cut into
+/// one-second pieces has two per second, so this covers some 14 hours. A crafted file of 8-byte
+/// boxes is refused here instead of costing memory and time without end.
+const MAX_BOXES: usize = 100_000;
+/// Padding boxes offered to reveal, newest first. Ours is the last box in the file, and each
+/// candidate costs a key derivation to reject.
+const MAX_CANDIDATES: usize = 4;
+
 /// HEIF-family major brands (HEIC stills and sequences). ISOBMFF too, but never a carrier:
 /// the front end converts them to JPEG first.
 pub const HEIF_BRANDS: &[&[u8; 4]] = &[
@@ -92,6 +100,7 @@ impl Carrier for Mp4Carrier {
             .iter()
             .rev()
             .filter(|b| b.is_padding())
+            .take(MAX_CANDIDATES)
             .map(|b| Region {
                 offset: b.offset + b.header_len,
                 len: b.total - b.header_len,
@@ -253,6 +262,9 @@ fn scan(src: &mut dyn ReadSeek) -> Result<Layout> {
     let mut boxes = Vec::new();
     let mut pos = 0;
     while pos < file_len {
+        if boxes.len() == MAX_BOXES {
+            return Err(malformed("too many top-level boxes"));
+        }
         let b = parse_box(src, pos, file_len)?;
         pos = b.offset + b.total; // total >= header_len >= 8, so this always advances
         boxes.push(b);
@@ -458,6 +470,39 @@ mod tests {
             .read_to_end(&mut ours)
             .unwrap();
         assert_eq!(ours, b"payload");
+    }
+
+    #[test]
+    fn a_flood_of_tiny_boxes_is_refused() {
+        // Each 8-byte box used to cost a stored header, so a crafted file grew memory without end.
+        let mut file = boxed(b"ftyp", b"isom\0\0\x02\0isomiso2");
+        for _ in 0..MAX_BOXES {
+            file.extend(boxed(b"junk", &[]));
+        }
+        assert!(matches!(
+            scan_bytes(&file),
+            Err(ZolalError::MalformedContainer { .. })
+        ));
+    }
+
+    #[test]
+    fn only_the_newest_padding_boxes_are_candidates() {
+        // Every candidate costs reveal a key derivation; hundreds of free boxes must not.
+        let mut file = synth_mp4();
+        for i in 0..100u8 {
+            file.extend(boxed(b"free", &[i; 16]));
+        }
+        let regions = Mp4Carrier
+            .candidate_regions(&mut Cursor::new(&file))
+            .unwrap();
+        assert_eq!(regions.len(), MAX_CANDIDATES);
+        let mut newest = Vec::new();
+        Mp4Carrier
+            .open_region(&mut Cursor::new(&file), &regions[0])
+            .unwrap()
+            .read_to_end(&mut newest)
+            .unwrap();
+        assert_eq!(newest, [99u8; 16], "the last box in the file comes first");
     }
 
     #[test]
