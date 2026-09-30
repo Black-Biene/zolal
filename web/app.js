@@ -474,7 +474,8 @@ async function hideMark() {
     try { img = await openImage(carrier, extOf(carrier), kind); } catch (e) {
       return show(box, "err", [strong("Can't use this photo. "), e.message]);
     }
-    const r = await m.hideText(img, text, pass, { onStatus: t => busy(box, t) });
+    const print = $("mark-print").checked;
+    const r = await m.hideText(img, text, pass, { onStatus: t => busy(box, t), strength: print ? m.PRINT_STRENGTH : 1 });
     if (!r.ok) {
       return show(box, "err", [strong("This photo didn't take the mark well. "),
         "Try a busier photo: trees, streets or fabric hold it best."]);
@@ -489,8 +490,10 @@ async function hideMark() {
       el("p", "small", r.quad
         ? "It's spread over the four quarters of the photo, with a spare, so it still reads if one quarter can't be."
         : "It's written once over the whole photo, the sturdiest kind of mark."),
-      el("p", "small", "Send it any way you like, even as a normal photo. To read it, open Reveal → A photo mark " +
-        "and take a photo of it, or choose the photo you received."),
+      el("p", "small", print
+        ? "Made stronger for printing. Print it large, then read it in good light, close up."
+        : "Send it any way you like, even as a normal photo. To read it, open Reveal → A photo mark " +
+          "and take a photo of it, or choose the photo you received."),
       again);
   } catch (e) {
     show(box, "err", [strong("Something went wrong. "), e.message]);

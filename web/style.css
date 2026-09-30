@@ -212,3 +212,5 @@ fieldset:disabled input.line { opacity: .45; cursor: not-allowed }
 .mark-load { margin: 8px 0 12px }
 .mark-load progress { display: block; width: 100%; height: 8px; margin-bottom: 4px; accent-color: var(--accent) }
 .mark-load .hint { margin: 0 }
+.check { display: flex; align-items: baseline; gap: 8px; margin: 8px 0 0; font-size: .92rem; cursor: pointer }
+.check .hint { margin: 0 }

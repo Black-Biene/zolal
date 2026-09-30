@@ -1,6 +1,6 @@
 // TrustMark lab: a test bench for the photo mark (web/photomark/photomark.js), which the main page also uses.
 // It adds what testing needs: the decoder's log, the crop that decoded, and the detector and size settings.
-import { DETECTORS, QUAD, SINGLE, hideText, loadModels, measure, revealText } from "../photomark/photomark.js?v=dev";
+import { DETECTORS, PRINT_STRENGTH, QUAD, SINGLE, hideText, loadModels, measure, revealText } from "../photomark/photomark.js?v=dev";
 
 const $ = id => document.getElementById(id);
 let box = "status";  // the status line of the tab in use
@@ -80,7 +80,7 @@ $("m-go").onclick = async () => {
   if (!password) return say("err", "Choose a password.");
   $("m-result").hidden = true;
   try {
-    const r = await hideText(file, text, password, { onStatus: t => say("busy", t) });
+    const r = await hideText(file, text, password, { onStatus: t => say("busy", t), strength: $("m-print").checked ? PRINT_STRENGTH : 1 });
     const view = $("m-view"), k = Math.min(1, 1200 / Math.max(r.width, r.height));
     view.width = Math.round(r.width * k); view.height = Math.round(r.height * k);
     view.getContext("2d").drawImage(r.canvas, 0, 0, view.width, view.height);
@@ -92,7 +92,7 @@ $("m-go").onclick = async () => {
     }, "image/png");
     if (!r.ok) return say("err", `Made the picture, but it didn't read back (${r.readBack ?? "nothing"}). Try another photo.`);
     say("ok", `Hidden: “${text}” in ${r.width}×${r.height}${r.scaled ? " (scaled down)" : ""}` +
-      `${r.quad ? ", four quarters" : ""}, ${r.ms} ms. It reads back. Now save it.`);
+      `${r.quad ? ", four quarters" : ""}${$("m-print").checked ? ", print strength" : ""}, ${r.ms} ms. It reads back. Now save it.`);
   } catch (err) { say("err", "Error: " + err.message); console.error(err); }
 };
 

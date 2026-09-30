@@ -80,6 +80,8 @@
             <input id="mark-text" class="line" maxlength="32" autocomplete="off" spellcheck="false"
               placeholder="come to lingen at 6pm" aria-describedby="mark-count">
             <p class="hint" id="mark-count" aria-live="polite"></p>
+            <label class="check"><input type="checkbox" id="mark-print"> Stronger mark for printing
+              <span class="hint">(a little more visible)</span></label>
             <div class="mark-load" role="status" aria-live="polite"><progress></progress><p class="hint"></p></div>
           </div>
         </fieldset>
@@ -114,9 +116,10 @@
         <strong>A photo mark survives chat apps, screenshots and cameras.</strong>
       </summary>
       <p>Send the photo any way you like, even as a normal photo, or show it on a screen and let someone point a
-      phone at it. It holds a short text (up to 32 characters). Busy photos (trees, streets, food) hold it best;
-      drawings and plain pictures may not survive printing or a camera. Unlike a hidden file, <em>anyone with the
-      right tools can tell a mark is there</em>; only the passphrase opens the text, so choose a long one.</p>
+      phone at it. It holds a short text (up to 32 characters). Busy photos (trees, streets, food) hold it best.
+      Going to print it? Tick <em>Stronger mark for printing</em>, and keep the text to 6 characters. Unlike a
+      hidden file, <em>anyone with the right tools can tell a mark is there</em>; only the passphrase opens the
+      text, so choose a long one.</p>
     </details>
 
     <div id="hide-status" class="status" role="status" aria-live="polite"></div>

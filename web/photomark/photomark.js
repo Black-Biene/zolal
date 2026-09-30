@@ -152,7 +152,7 @@ const MAX_PIXELS = 16_000_000;
 // Mark one region [L, T, RW, RH] of the photo with 100 bits, as TrustMark's Python encode() does: Adobe's
 // encoder at 256×256, then the change it made is scaled up and added to the full-resolution pixels `px`.
 // The cover is read from the canvas `full`, which still holds the original: px is written back at the end.
-async function markRegion(enc, full, px, W, [L, T, RW, RH], bits) {
+async function markRegion(enc, full, px, W, [L, T, RW, RH], bits, strength) {
   const cover = tensor(draw(full, 256, 256, L, T, RW, RH), [1, 3, 256, 256], v => v * 2 - 1);
   const out = await enc.run({
     [enc.inputNames[0]]: cover,
@@ -184,7 +184,7 @@ async function markRegion(enc, full, px, W, [L, T, RW, RH], bits) {
       for (let c = 0; c < 3; c++) {
         const o = c * N, r = (1 - wy) * ((1 - wx) * res[o + y0 * 256 + x0] + wx * res[o + y0 * 256 + x1])
           + wy * ((1 - wx) * res[o + y1 * 256 + x0] + wx * res[o + y1 * 256 + x1]);
-        const orig = px[i + c], wm = Math.floor((Math.max(-1, Math.min(1, r + orig / 127.5 - 1)) + 1) * 127.5);
+        const orig = px[i + c], wm = Math.floor((Math.max(-1, Math.min(1, strength * r + orig / 127.5 - 1)) + 1) * 127.5);
         px[i + c] = a === 1 ? wm : Math.floor(a * wm + (1 - a) * orig);
       }
     }
@@ -193,7 +193,11 @@ async function markRegion(enc, full, px, W, [L, T, RW, RH], bits) {
 
 // Hide `text` in `source` (a File/Blob, or an ImageBitmap/canvas the page decoded itself, e.g. from HEIC).
 // Returns the marked canvas and whether the text reads straight back from it.
-export async function hideText(source, text, password, { onStatus = () => {} } = {}) {
+// `strength` scales the mark, as TrustMark's WM_STRENGTH does. 1.0 survives screens, screenshots and chat apps;
+// printing needs 1.5 (Adobe's FAQ; a print of a 1.0 mark came back with ~20 of 96 bits wrong, 5 are fixable),
+// at ~3.4 dB less PSNR (40 -> 37 dB on the owner's photos), i.e. a little more visible.
+export const PRINT_STRENGTH = 1.5;
+export async function hideText(source, text, password, { onStatus = () => {}, strength = 1 } = {}) {
   onStatus("Opening the photo…"); await tick();
   const bmp = await bitmap(source);
   const s = Math.min(1, Math.sqrt(MAX_PIXELS / (bmp.width * bmp.height)));
@@ -223,7 +227,7 @@ export async function hideText(source, text, password, { onStatus = () => {} } =
   const enc = await model(ENCODER);
   onStatus("Hiding the text…"); await tick();
   const t = performance.now();
-  for (let k = 0; k < regions.length; k++) await markRegion(enc, full, px, W, regions[k], marks[k]);
+  for (let k = 0; k < regions.length; k++) await markRegion(enc, full, px, W, regions[k], marks[k], strength);
   g.putImageData(img, 0, 0);
   const ms = Math.round(performance.now() - t);
 

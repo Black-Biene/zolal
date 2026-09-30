@@ -116,6 +116,20 @@ Three findings:
 - **Slow failure, fixed**: with the upright view unclear, all four turns got 300 decodes each (minutes on a
   phone). Now every turn is scored first, the best is read first, and all share one 300-decode budget.
 
+## Printed busy photo (2026-09-30): printing needs a stronger mark
+
+A lake photo marked with a 5-character text (one BCH_5 mark, strength 1.0), printed and photographed close up
+(sideways, slight angle, strong colour shift and visible printer banding). Not readable:
+
+- Straightened with a perspective transform from the four corners: best of 6561 corner guesses 7 wrong bits,
+  typical ~20 of 96 (BCH_5 fixes 5). Plain rectangle crops: best 8. So the angle is not the cause; printing
+  destroys most of the mark.
+- Contrast stretch, gray-world colour balance, blur, and averaging the decoder's soft output over 165 crops
+  all stay at ~19–21 wrong bits.
+- Adobe's FAQ: raising WM_STRENGTH from 1.0 to 1.5 "is sufficient to have TrustMark survive printing to
+  paper". Cost: ~3.4 dB PSNR (40.0 -> 36.7 dB with Adobe's encoder, 39.4 -> 35.7 dB in the browser). The page
+  now offers **Stronger mark for printing** (strength 1.5); not yet tested with a real print.
+
 ## Browser-sized models (ONNX)
 
 `python onnx_export.py` builds the reader models into `models/` (git-ignored; `pip install onnx onnxruntime`
