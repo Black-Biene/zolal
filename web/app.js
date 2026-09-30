@@ -101,11 +101,11 @@ for (const t of tabs) {
 
 for (const drop of document.querySelectorAll(".drop")) {
   const input = drop.querySelector("input"), hint = drop.querySelector(".drop-hint");
-  const empty = hint.textContent;
+  hint.dataset.empty = hint.textContent;  // what the hint says with no file (the reveal mode changes it)
   const update = async () => {
     const files = [...input.files];
     drop.classList.toggle("filled", files.length > 0);
-    hint.textContent = !files.length ? empty
+    hint.textContent = !files.length ? hint.dataset.empty
       : files.length === 1 ? `${files[0].name} · ${human(files[0].size)}`
       : `${files.length} files · ${human(files.reduce((s, f) => s + f.size, 0))}`;
     if (input.id === "hide-carrier") {
@@ -137,13 +137,18 @@ for (const peek of document.querySelectorAll(".peek")) {
   };
 }
 
-// Step 2 is either files or typed text; only the chosen one is shown and hidden.
+// Step 2 is files, typed text, or a photo mark; only the chosen one is shown and hidden.
+const hideMode = () => document.querySelector('input[name="what"]:checked').value;
 for (const radio of document.querySelectorAll('input[name="what"]')) {
   radio.addEventListener("change", () => {
-    const text = radio.value === "text" && radio.checked;
-    $("what-files").hidden = text;
-    $("what-text").hidden = !text;
-    (text ? $("hide-message") : $("hide-payload")).focus();
+    const mode = hideMode();
+    $("what-files").hidden = mode !== "files";
+    $("what-text").hidden = mode !== "text";
+    $("what-mark").hidden = mode !== "mark";
+    $("send-tip").hidden = mode === "mark";
+    $("mark-tip").hidden = mode !== "mark";
+    ({ files: $("hide-payload"), text: $("hide-message"), mark: $("mark-text") })[mode].focus();
+    if (mode === "mark") { $("mark-text").oninput(); ensureModels().catch(() => {}); }
   });
 }
 
@@ -248,21 +253,25 @@ async function decodeHeic(file) {
   return createImageBitmap(new ImageData(pixels.data, width, height));
 }
 
-// Redraw a photo as JPEG. The browser opens PNG, WebP, GIF and AVIF itself, and HEIC falls back to libheif.
-// Very large photos are scaled to 16 megapixels, the most a canvas can hold on iPhones.
-async function toJpeg(file, ext, kind) {
-  let img;
-  try { img = await createImageBitmap(file); } catch {
+// Open a photo as a bitmap. The browser opens JPEG, PNG, WebP, GIF and AVIF itself; HEIC falls back to libheif.
+async function openImage(file, ext, kind) {
+  try { return await createImageBitmap(file); } catch {
     const heic = kind === "image" || /HEI[CF]/.test(ext);
     try {
       if (!heic) throw new Error("unsupported");
-      img = await decodeHeic(file);
+      return await decodeHeic(file);
     } catch {
       throw new Error(heic
         ? "Couldn't read this HEIC photo. It may be damaged; try exporting it as JPEG."
         : `This browser can't open this ${ext} image. Convert it to JPEG first.`);
     }
   }
+}
+const extOf = file => (file.name.match(/\.([^.]+)$/)?.[1] ?? "").toUpperCase() || "this format";
+
+// Redraw a photo as JPEG. Very large photos are scaled to 16 megapixels, the most a canvas can hold on iPhones.
+async function toJpeg(file, ext, kind) {
+  const img = await openImage(file, ext, kind);
   const MAX_PIXELS = 16_000_000;
   const scale = Math.min(1, Math.sqrt(MAX_PIXELS / (img.width * img.height)));
   const canvas = document.createElement("canvas");
@@ -294,7 +303,8 @@ const VERDICT = {
 const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
 
 $("hide").onclick = async () => {
-  const textMode = document.querySelector('input[name="what"]:checked').value === "text";
+  if (hideMode() === "mark") return hideMark();
+  const textMode = hideMode() === "text";
   const box = $("hide-status"), carrier = $("hide-carrier").files[0];
   const payloads = textMode ? [] : [...$("hide-payload").files];
   const message = textMode ? $("hide-message").value : "", pass = $("hide-pass").value;
@@ -351,6 +361,7 @@ $("hide").onclick = async () => {
 // ---- reveal --------------------------------------------------------------------------------------------
 
 $("reveal").onclick = async () => {
+  if (revealMode() === "mark") return revealMark();
   const box = $("reveal-status"), carrier = $("reveal-carrier").files[0], pass = $("reveal-pass").value;
   if (!carrier) return show(box, "err", "Choose the file to open first.");
   if (!pass) return show(box, "err", "Enter the passphrase.");
@@ -385,3 +396,167 @@ $("reveal").onclick = async () => {
     button.disabled = false;
   }
 };
+
+// ---- photo mark ----------------------------------------------------------------------------------------
+//
+// A short text hidden in a photo so that it survives chat apps, screenshots and camera shots (photomark/,
+// shared with the lab). Its code and ~150 MB of models load only when this mode is chosen, once per device.
+
+let photomark = null;
+const pm = () => (photomark ??= import("./photomark/photomark.js?v=dev").catch(e => { photomark = null; throw e; }));
+
+let models = null;
+// Download (once) and prepare the models, showing progress in every .mark-load box.
+function ensureModels() {
+  const boxes = [...document.querySelectorAll(".mark-load")];
+  const each = f => boxes.forEach(b => f(b.querySelector("progress"), b.querySelector("p")));
+  const mb = n => (n / 1e6).toFixed(0);
+  models ??= pm().then(m => m.loadModels({
+    onProgress: p => each((bar, text) => {
+      bar.hidden = false;
+      if (p.phase === "download") {
+        bar.max = p.total || 1; bar.value = p.done;
+        text.textContent = `Downloading the photo mark once: ${mb(p.done)} / ${mb(p.total)} MB. Wi-Fi recommended.`;
+      } else {
+        bar.removeAttribute("value");
+        text.textContent = `Getting the photo mark ready (${p.step} of ${p.steps})…`;
+      }
+    }),
+  })).then(kept => {
+    each((bar, text) => {
+      bar.hidden = true;
+      text.textContent = kept ? "Photo mark ready. It's saved on this device and works offline."
+        : "Photo mark ready. (This browser can't keep it, so it downloads again next visit.)";
+    });
+  }, e => {
+    models = null;
+    each((bar, text) => { bar.hidden = true; text.textContent = "Couldn't download the photo mark. Check your connection and try again."; });
+    throw e;
+  });
+  return models;
+}
+
+// How much room is left: 6 characters fit one mark over the whole photo (the sturdiest), up to 32 use four.
+$("mark-text").oninput = async () => {
+  const { SINGLE, QUAD, measure } = await pm();
+  const { length: n, bad, fits } = measure($("mark-text").value), count = $("mark-count");
+  count.className = "hint" + (fits ? "" : " count-bad");
+  if (bad.length) return void (count.textContent = `Not allowed: ${bad.join(" ")}. Use letters, digits, spaces and “.”`);
+  count.textContent = n <= SINGLE
+    ? `${SINGLE - n} of ${SINGLE} characters left for the sturdiest mark. Longer texts, up to ${QUAD}, work too.`
+    : `${QUAD - n} of ${QUAD} characters left.`;
+};
+
+async function hideMark() {
+  const box = $("hide-status"), carrier = $("hide-carrier").files[0], text = $("mark-text").value;
+  const pass = $("hide-pass").value;
+  if (!carrier) return show(box, "err", "Step 1: choose a photo first.");
+  const { kind } = await carrierPlan(carrier);
+  if (kind !== "jpeg" && kind !== "image") {
+    return show(box, "err", [strong("A photo mark needs a photo. "), "Choose a photo as the cover file in step 1."]);
+  }
+  if (!text.trim()) return show(box, "err", "Step 2: type the short text to hide.");
+  if (!pass) return show(box, "err", "Step 3: set a passphrase.");
+
+  const button = $("hide");
+  button.disabled = true;
+  busy(box, "Getting the photo mark ready…");
+  await paint();
+  try {
+    let m;
+    try { m = await pm(); await ensureModels(); } catch {
+      return show(box, "err", [strong("Couldn't download the photo mark. "), "Check your connection and try again."]);
+    }
+    if (!m.measure(text).fits) {
+      return show(box, "err", [strong("This text can't be hidden. "), `Use up to ${m.QUAD} letters, digits, spaces and “.”`]);
+    }
+    let img;
+    try { img = await openImage(carrier, extOf(carrier), kind); } catch (e) {
+      return show(box, "err", [strong("Can't use this photo. "), e.message]);
+    }
+    const r = await m.hideText(img, text, pass, { onStatus: t => busy(box, t) });
+    if (!r.ok) {
+      return show(box, "err", [strong("This photo didn't take the mark well. "),
+        "Try a busier photo: trees, streets or fabric hold it best."]);
+    }
+    const out = await new Promise(res => r.canvas.toBlob(res, "image/jpeg", 0.95));
+    const name = baseName(carrier) + "-mark.jpg";
+    download(name, out);
+    const again = el("button", "again", `Download ${name} again`);
+    again.onclick = () => download(name, out);
+    show(box, "ok",
+      [strong("Done. "), `Your text is in ${name}, which has been downloaded.`],
+      el("p", "small", r.quad
+        ? "It's spread over the four quarters of the photo, with a spare, so it still reads if one quarter can't be."
+        : "It's written once over the whole photo, the sturdiest kind of mark."),
+      el("p", "small", "Send it any way you like, even as a normal photo. To read it, open Reveal → A photo mark " +
+        "and take a photo of it, or choose the photo you received."),
+      again);
+  } catch (e) {
+    show(box, "err", [strong("Something went wrong. "), e.message]);
+  } finally {
+    button.disabled = false;
+  }
+}
+
+// Reveal has two modes: a file with something hidden in it (the engine), or a photo mark.
+const revealMode = () => document.querySelector('input[name="open"]:checked').value;
+const REVEAL_TEXT = {
+  file: { lead: $("reveal-lead").textContent, accept: $("reveal-carrier").accept, title: "File to open",
+    hint: $("reveal-carrier").closest(".drop").querySelector(".drop-hint").dataset.empty, button: "Reveal files" },
+  mark: { lead: "Read a photo mark: take a photo of it, or choose a screenshot or a photo you received. Hold the " +
+    "phone close, so the marked photo fills most of the shot.", accept: "image/*", title: "Photo with the mark",
+    hint: "A photo of it, a screenshot, or the photo you received.", button: "Reveal text" },
+};
+for (const radio of document.querySelectorAll('input[name="open"]')) {
+  radio.addEventListener("change", () => {
+    const mode = revealMode(), t = REVEAL_TEXT[mode], drop = $("reveal-carrier").closest(".drop");
+    const hint = drop.querySelector(".drop-hint");
+    $("reveal-lead").textContent = t.lead;
+    $("reveal-carrier").accept = t.accept;
+    drop.querySelector(".drop-title").textContent = t.title;
+    hint.dataset.empty = t.hint;
+    if (!$("reveal-carrier").files.length) hint.textContent = t.hint;
+    $("reveal").textContent = t.button;
+    document.querySelector("#panel-reveal .mark-load").hidden = mode !== "mark";
+    $("reveal-status").className = "status"; $("reveal-status").replaceChildren();
+    if (mode === "mark") ensureModels().catch(() => {});
+  });
+}
+
+async function revealMark() {
+  const box = $("reveal-status"), file = $("reveal-carrier").files[0], pass = $("reveal-pass").value;
+  if (!file) return show(box, "err", "Take or choose the photo first.");
+  if (!pass) return show(box, "err", "Enter the passphrase.");
+
+  const button = $("reveal");
+  button.disabled = true;
+  busy(box, "Getting the photo mark ready…");
+  await paint();
+  try {
+    let m;
+    try { m = await pm(); await ensureModels(); } catch {
+      return show(box, "err", [strong("Couldn't download the photo mark. "), "Check your connection and try again."]);
+    }
+    let img;
+    try { img = await openImage(file, extOf(file), (await carrierPlan(file)).kind); } catch (e) {
+      return show(box, "err", [strong("Can't open this photo. "), e.message]);
+    }
+    const r = await m.revealText(img, pass, { onStatus: t => busy(box, t) });
+    // A photo mark can be seen by anyone with the right tools, so saying that one was found gives nothing away
+    // (unlike a hidden file, whose failures all look the same).
+    if (r.text) return show(box, "ok", [strong("Found text.")], el("div", "message", r.text));
+    if (r.locked) {
+      return show(box, "err", [strong("Found a photo mark, but this passphrase doesn't open it. "),
+        "Check the passphrase and try again."]);
+    }
+    show(box, "err", [strong("No photo mark found. "),
+      "Get closer so the marked photo fills most of the shot, hold still, and try again."],
+      el("p", "small", "Files with something hidden inside open under “A file”."));
+  } catch (e) {
+    show(box, "err", [strong("Something went wrong. "), e.message]);
+  } finally {
+    button.disabled = false;
+  }
+}
+

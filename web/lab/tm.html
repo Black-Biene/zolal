@@ -78,8 +78,8 @@
     <details class="hint settings">
       <summary>Test settings</summary>
       <label>Detector <select id="det">
-        <option value="detector_Q_fp16w.onnx">fp16, 83 MB (faster)</option>
-        <option value="detector_Q_int8.onnx">int8, 42 MB (smaller)</option>
+        <option data-k="fast" value="detector_Q_fp16w.onnx">fp16, 83 MB (faster)</option>
+        <option data-k="small" value="detector_Q_int8.onnx">int8, 42 MB (smaller)</option>
       </select></label>
       <label>Size <select id="side">
         <option>640</option><option>1024</option><option>1600</option>

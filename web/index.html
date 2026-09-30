@@ -61,6 +61,7 @@
           <div class="switch" role="radiogroup" aria-label="What to hide">
             <label><input type="radio" name="what" value="files" checked> Files</label>
             <label><input type="radio" name="what" value="text"> Text</label>
+            <label><input type="radio" name="what" value="mark"> Photo mark</label>
           </div>
           <label class="drop" data-for="hide-payload" id="what-files">
             <input id="hide-payload" type="file" multiple>
@@ -73,6 +74,13 @@
           <div id="what-text" hidden>
             <label class="sr-only" for="hide-message">Text to hide</label>
             <textarea id="hide-message" rows="6" spellcheck="false" placeholder="Type or paste the text to hide."></textarea>
+          </div>
+          <div id="what-mark" hidden>
+            <label class="sr-only" for="mark-text">Short text to hide</label>
+            <input id="mark-text" class="line" maxlength="32" autocomplete="off" spellcheck="false"
+              placeholder="come to lingen at 6pm" aria-describedby="mark-count">
+            <p class="hint" id="mark-count" aria-live="polite"></p>
+            <div class="mark-load" role="status" aria-live="polite"><progress></progress><p class="hint"></p></div>
           </div>
         </fieldset>
       </li>
@@ -100,12 +108,28 @@
       (WhatsApp: attach → Document; Telegram: attach → File), by email, or inside a .zip.</p>
     </details>
 
+    <details class="callout" id="mark-tip" hidden open>
+      <summary>
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" aria-hidden="true"><path d="M3 7h3l2-3h8l2 3h3v13H3z"/><circle cx="12" cy="13" r="4"/></svg>
+        <strong>A photo mark survives chat apps, screenshots and cameras.</strong>
+      </summary>
+      <p>Send the photo any way you like, even as a normal photo, or show it on a screen and let someone point a
+      phone at it. It holds a short text (up to 32 characters). Unlike a hidden file, <em>anyone with the right
+      tools can tell a mark is there</em>; only the passphrase opens the text, so choose a long one.</p>
+    </details>
+
     <div id="hide-status" class="status" role="status" aria-live="polite"></div>
     <button id="hide" class="primary">Hide and download</button>
   </section>
 
   <section id="panel-reveal" role="tabpanel" aria-labelledby="tab-reveal" hidden>
-    <p class="lead">Open a file that has something hidden in it, using the passphrase it was hidden with.</p>
+    <div class="switch" role="radiogroup" aria-label="What to open">
+      <label><input type="radio" name="open" value="file" checked> A file</label>
+      <label><input type="radio" name="open" value="mark"> A photo mark</label>
+    </div>
+    <p class="lead" id="reveal-lead">Open a file that has something hidden in it, using the passphrase it was hidden
+    with.</p>
+    <div class="mark-load" role="status" aria-live="polite" hidden><progress></progress><p class="hint"></p></div>
 
     <label class="drop" data-for="reveal-carrier">
       <input id="reveal-carrier" type="file" accept="image/jpeg,video/mp4,audio/mpeg,audio/mp4,application/pdf,.jpg,.jpeg,.mp4,.m4v,.m4a,.mp3,.pdf">

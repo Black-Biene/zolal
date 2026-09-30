@@ -1,4 +1,4 @@
 target/
 web/zolal-cli.wasm
-web/lab/models/
+web/photomark/models/
 .DS_Store

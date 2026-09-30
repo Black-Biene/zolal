@@ -11,15 +11,16 @@ const FILES = [
 self.addEventListener("install", e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES)).then(() => self.skipWaiting()));
 });
+// Only this worker's own per-deploy caches are cleared: the photo mark's models live in a cache of their own.
 self.addEventListener("activate", e => e.waitUntil(caches.keys()
-  .then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k))))
+  .then(keys => Promise.all(keys.filter(k => k.startsWith("zolal-?v=") && k !== CACHE).map(k => caches.delete(k))))
   .then(() => self.clients.claim())));
 
 self.addEventListener("fetch", e => {
   const url = new URL(e.request.url);
-  // The lab's ~150 MB of models keep their own versioned cache (lab/tm.js); copying them into this
-  // per-deploy cache would store them twice and fetch them again on every deploy.
-  if (e.request.method !== "GET" || url.origin !== location.origin || url.pathname.includes("/lab/models/")) return;
+  // The photo mark's ~150 MB of models keep their own versioned cache (photomark/photomark.js); copying them
+  // into this per-deploy cache would store them twice and fetch them again on every deploy.
+  if (e.request.method !== "GET" || url.origin !== location.origin || url.pathname.includes("/photomark/models/")) return;
   e.respondWith(fetch(e.request).then(res => {
     if (res.ok) { const copy = res.clone(); caches.open(CACHE).then(c => c.put(e.request, copy)); }
     return res;

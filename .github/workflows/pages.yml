@@ -10,12 +10,12 @@ jobs:
       - run: rustup target add wasm32-wasip1
       - run: cargo build --release -p zolal-cli --target wasm32-wasip1 --locked
       - run: cp target/wasm32-wasip1/release/zolal-cli.wasm web/
-      # TrustMark reader models for the lab's tm.html (~130 MB, too big for git): built from Adobe's files by
-      # onnx_export.py, cached until the script or its pinned versions change.
+      # Photo mark models for web/photomark/ (the main page and the lab; ~150 MB, too big for git): built from
+      # Adobe's files by onnx_export.py, cached until the script or its pinned versions change.
       - id: tm-models
         uses: actions/cache@v4
         with:
-          path: web/lab/models
+          path: web/photomark/models
           key: tm-models-${{ hashFiles('research/ai-watermarks/onnx_export.py', 'research/ai-watermarks/requirements-export.txt') }}
       - if: steps.tm-models.outputs.cache-hit != 'true'
         uses: actions/setup-python@v5
@@ -26,10 +26,10 @@ jobs:
           pip install torch==2.14.0 torchvision==0.29.0 --index-url https://download.pytorch.org/whl/cpu
           pip install -r requirements-export.txt
           python onnx_export.py
-          mkdir -p ../../web/lab/models
-          cp models/encoder_Q.onnx models/decoder_Q.onnx models/detector_Q_fp16w.onnx models/detector_Q_int8.onnx ../../web/lab/models/
+          mkdir -p ../../web/photomark/models
+          cp models/encoder_Q.onnx models/decoder_Q.onnx models/detector_Q_fp16w.onnx models/detector_Q_int8.onnx ../../web/photomark/models/
       # Tag asset URLs with the commit so browsers never mix a new page with cached old files.
-      - run: sed -i "s/?v=dev/?v=${GITHUB_SHA::8}/g" web/index.html web/app.js web/sw.js web/lab/*.html web/lab/*.js
+      - run: sed -i "s/?v=dev/?v=${GITHUB_SHA::8}/g" web/index.html web/app.js web/sw.js web/lab/*.html web/lab/*.js web/photomark/*.js
       - uses: actions/upload-pages-artifact@v3
         with: { path: web }
       - id: deploy
