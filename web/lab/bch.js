@@ -1,10 +1,10 @@
-// TrustMark payload decoder: BCH_5 error correction (up to 5 wrong bits); plain 7-bit ASCII text for marks
-// made without a password (tmseal.js opens the others).
+// TrustMark payload codes: BCH_5 (fixes up to 5 wrong bits; single marks) and BCH_3 (fixes 3; one per quarter
+// of a four-quarter mark); plain 7-bit ASCII text for marks made without a password (tmseal.js opens the rest).
 // Written from Adobe's Python reference (trustmark/bchecc.py + datalayer.py, MIT), which follows the Linux
-// kernel BCH layout: 61 data bits padded to 64, then 35 check bits; codeword c(x) = data(x)·x^35 + ecc(x),
-// first bit = highest power. Field GF(2^7), polynomial x^7 + x^3 + 1 (137).
+// kernel BCH layout: data bits zero-padded to whole bytes, then the check bits; codeword
+// c(x) = data(x)·x^ecc + ecc(x), first bit = highest power. Field GF(2^7), polynomial x^7 + x^3 + 1 (137).
 
-const M = 7, N = 127, T = 5, POLY = 137, DATA = 61, ECC = 35;
+const M = 7, N = 127, POLY = 137;
 const EXP = new Array(2 * N), LOG = new Array(N + 1);
 for (let i = 0, x = 1; i < N; i++) {
   EXP[i] = EXP[i + N] = x; LOG[x] = i;
@@ -14,7 +14,7 @@ const mul = (a, b) => (a && b ? EXP[LOG[a] + LOG[b]] : 0);
 
 // Generator g(x): binary polynomial whose roots are alpha^1..alpha^2T and their conjugates. Coefficients over
 // GF(2^7) while multiplying out; the result is binary (0/1), highest power first.
-const GEN = (() => {
+function generator(T) {
   const roots = new Set();
   for (let i = 1; i < 2 * T; i += 2) for (let r = i, j = 0; j < M; j++, r = (2 * r) % N) roots.add(r);
   let g = [1];
@@ -24,24 +24,32 @@ const GEN = (() => {
     g = next;
   }
   return g;  // length ECC + 1
-})();
+}
+// T errors fixed; DATA bits (+PAD zeros to a whole byte); ECC = 7·T check bits; the last 4 of the 100 bits
+// name the schema.
+const CODES = {
+  5: { T: 5, DATA: 61, PAD: 3, ECC: 35, VERSION: [0, 0, 0, 1], GEN: generator(5) },
+  3: { T: 3, DATA: 75, PAD: 5, ECC: 21, VERSION: [0, 0, 1, 1], GEN: generator(3) },
+};
 
-// "0101…" of 61 data bits -> 100 booleans: data, 35 check bits (remainder of data(x)·x^35 mod g, with the 3
-// padding zeros counted as data), version 0001.
-export function encode(data) {
-  const r = [...data, "0", "0", "0"].map(Number).concat(new Array(ECC).fill(0));
-  for (let i = 0; i < DATA + 3; i++) if (r[i]) for (let j = 0; j < GEN.length; j++) r[i + j] ^= GEN[j];
-  return [...data].map(b => b === "1").concat(r.slice(DATA + 3).map(Boolean), [false, false, false, true]);
+// "0101…" of DATA bits -> 100 booleans: data, check bits (remainder of data(x)·x^ECC mod g, with the padding
+// zeros counted as data), schema.
+export function encode(data, t = 5) {
+  const { DATA, PAD, ECC, VERSION, GEN } = CODES[t];
+  const r = [...data.padEnd(DATA + PAD, "0")].map(Number).concat(new Array(ECC).fill(0));
+  for (let i = 0; i < DATA + PAD; i++) if (r[i]) for (let j = 0; j < GEN.length; j++) r[i + j] ^= GEN[j];
+  return [...data].map(b => b === "1").concat(r.slice(DATA + PAD).map(Boolean), VERSION.map(Boolean));
 }
 
-// bits: 100 booleans from the decoder model (logit > 0). Returns the 61 corrected data bits as a "0101…"
-// string, or null if they aren't a BCH_5 codeword within 5 errors.
-export function correct(bits) {
-  // Bits 96–99 name the schema (0001 = BCH_5). No ECC covers them and we only write BCH_5, so they're
-  // ignored: checking them rejected ~9% of good reads whose flipped bits landed there.
+// bits: 100 booleans from the decoder model (logit > 0). Returns the corrected data bits as a "0101…" string,
+// or null if they aren't a codeword of that code within t errors.
+export function correct(bits, t = 5) {
+  // The 4 schema bits have no ECC, so they're ignored: the caller says which code it expects (checking them
+  // rejected ~9% of good reads whose flipped bits landed there).
+  const { T, DATA, PAD, ECC } = CODES[t];
   if (bits.length !== 100) return null;
-  const r = [...bits.slice(0, DATA), 0, 0, 0, ...bits.slice(DATA, DATA + ECC)].map(Number);
-  const len = r.length;  // 99; bit k is the coefficient of x^(len-1-k)
+  const r = [...bits.slice(0, DATA), ...new Array(PAD).fill(0), ...bits.slice(DATA, DATA + ECC)].map(Number);
+  const len = r.length;  // bit k is the coefficient of x^(len-1-k)
 
   const syn = [];
   for (let j = 1; j <= 2 * T; j++) {
@@ -72,7 +80,7 @@ export function correct(bits) {
     if (found.length !== L) return null;  // more errors than the code can fix
     for (const k of found) r[k] ^= 1;
   }
-  if (r[61] || r[62] || r[63]) return null;  // padding is sent as 0, so a "fix" there is a miscorrection
+  if (r.slice(DATA, DATA + PAD).includes(1)) return null;  // padding is sent as 0: a "fix" there is wrong
   return r.slice(0, DATA).join("");
 }
 

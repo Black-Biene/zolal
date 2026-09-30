@@ -1,9 +1,9 @@
-"""Password layer for a TrustMark payload: 61 bits = nonce (9) | ciphertext (36) | tag (16).
+"""Password layer for a TrustMark payload: nonce (9) | ciphertext | tag (16) | zero padding.
 
-The text is up to 6 characters from ALPHABET (6 bits each). K = PBKDF2-SHA256(password, "zolal-tm1" + nonce,
-600k rounds); the keystream is HMAC(K, "enc") and the tag HMAC(K, "tag" + nonce|ciphertext), truncated. The tag
-rejects a wrong password and random reads that happen to pass BCH (1 in 65536). web/lab/tmseal.js is the
-browser twin; `python tmseal.py` checks this file against itself.
+The text is 6-bit characters from ALPHABET: a single mark's 61 bits hold 6, a four-quarter mark's 219 bits
+hold 32. K = PBKDF2-SHA256(password, "zolal-tm1" + nonce, 600k rounds); the keystream is HMAC(K, "enc") and
+the tag HMAC(K, "tag" + nonce|ciphertext), truncated. The tag rejects a wrong password and random reads that
+happen to pass BCH (1 in 65536). web/lab/tmseal.js is the browser twin; `python tmseal.py` checks this file.
 """
 import hashlib
 import hmac
@@ -11,8 +11,12 @@ import secrets
 import unicodedata
 
 ALPHABET = " abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789."
-CHARS, NONCE, TAG = 6, 9, 16
+NONCE, TAG = 9, 16
 ROUNDS = 600_000
+
+
+def capacity(bits):
+    return (bits - NONCE - TAG) // 6
 
 
 def _pack(bits):  # "0101…" -> bytes, MSB first, zero-padded
@@ -33,20 +37,24 @@ def _tag(k, nonce, ct):
     return _bits(hmac.new(k, b"tag" + _pack(nonce + ct), "sha256").digest(), TAG)
 
 
-def seal(text, password, nonce=None):
-    if len(text) > CHARS or any(c not in ALPHABET for c in text):
-        raise ValueError(f"text must be up to {CHARS} characters from: {ALPHABET!r}")
+def seal(text, password, nonce=None, bits=61):
+    chars = capacity(bits)
+    if len(text) > chars or any(c not in ALPHABET for c in text):
+        raise ValueError(f"text must be up to {chars} characters from: {ALPHABET!r}")
     nonce = nonce or f"{secrets.randbits(NONCE):0{NONCE}b}"
     k = _key(password, nonce)
-    pt = "".join(f"{ALPHABET.index(c):06b}" for c in text.ljust(CHARS))
+    pt = "".join(f"{ALPHABET.index(c):06b}" for c in text.ljust(chars))
     ks = _bits(hmac.new(k, b"enc", "sha256").digest(), len(pt))
     ct = "".join(str(int(a) ^ int(b)) for a, b in zip(pt, ks))
-    return nonce + ct + _tag(k, nonce, ct)
+    return (nonce + ct + _tag(k, nonce, ct)).ljust(bits, "0")
 
 
 def open_(bits, password):
-    """61-bit string -> text, or None if the password is wrong or it isn't a sealed payload."""
-    nonce, ct, tag = bits[:NONCE], bits[NONCE:NONCE + 6 * CHARS], bits[NONCE + 6 * CHARS:]
+    """Bit string -> text, or None if the password is wrong or it isn't a sealed payload."""
+    n = 6 * capacity(len(bits))
+    nonce, ct, tag = bits[:NONCE], bits[NONCE:NONCE + n], bits[NONCE + n:NONCE + n + TAG]
+    if "1" in bits[NONCE + n + TAG:]:
+        return None
     k = _key(password, nonce)
     if not hmac.compare_digest(_tag(k, nonce, ct), tag):
         return None
@@ -60,4 +68,7 @@ if __name__ == "__main__":
     assert len(b) == 61 and open_(b, "correct horse") == "Hi.42"
     assert open_(b, "wrong horse") is None
     assert seal("x", "pw", "000000001") == seal("x", "pw", "000000001") != seal("x", "pw", "000000010")
-    print("ok", b)
+    long = "come to lingen at 6pm. bring tea"
+    b = seal(long, "pw", bits=219)
+    assert len(b) == 219 and capacity(219) == 32 and open_(b, "pw") == long
+    print("ok")

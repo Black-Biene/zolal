@@ -72,6 +72,27 @@ upscale, 1% edge fade). It reads the result back before offering the PNG. On the
 0.6 s on the MacBook, PSNR 39.4 dB (at 1200 px), and a 1200 px JPEG copy read back at quality 90, 70 and 50.
 Photos above 16 MP are scaled down first (iOS canvas limit).
 
+## Longer texts: four quarters with a spare
+
+One mark holds 100 bits, so 6 characters with a password. For more, the page's *Hide* tab splits the photo
+2×2 (0 top-left, 1 top-right, 2 bottom-left, 3 bottom-right) and marks each quarter separately with BCH_3
+(fixes 3 wrong bits instead of 5; on real camera shots good crops had 0–1 wrong bits): 75 bits = the
+quarter's index (2) + 73. Quarters 0–2 hold a 219-bit sealed payload, **32 characters**; quarter 3 holds their
+XOR, so any one quarter may be unreadable. Texts of up to 6 characters still use one mark (sturdier).
+
+- First test (plain texts, `out/myphoto-tiled.png`): a hand crop read 3 of 4 quarters from a camera shot and
+  from a Telegram copy; the top-right quarter (plain bright table, strong moiré) read in neither. An automatic
+  search over the detector's boxes also found 3 of 4 in both.
+- The detector gets confused by four marks (it reports halves or single quarters), so the reader tries the
+  union of all boxes and every box as the whole picture split in four, and every box as one quarter.
+- BCH_3 lets ~8% of random words through, so each index keeps several candidates and the password tag
+  picks the combination. When all four quarters agree (quarter 3 = XOR of 0–2, 73 bits) a failed tag means a
+  wrong password, and the reader stops.
+- `bch.js` BCH_3 = Python on 1000/1000 random payloads (and BCH_5 still 1000/1000); `tmseal` holds 32
+  characters in 219 bits in both languages.
+- In the browser (MacBook): hiding 32 characters in a 12 MP photo 1.8 s, reads back; a 1200 px JPEG copy
+  reveals it after 23 decodes; a wrong password is reported after 24. Single marks (plain and sealed) still read.
+
 ## Browser-sized models (ONNX)
 
 `python onnx_export.py` builds the reader models into `models/` (git-ignored; `pip install onnx onnxruntime`
