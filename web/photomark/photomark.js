@@ -3,30 +3,41 @@
 // Hide: seal the text with the password (tmseal.js), BCH-encode it (bch.js), run Adobe's TrustMark encoder on
 // the photo and blend the change in as TrustMark's Python encode() does. Reveal: the picture detector finds
 // the marked picture in a camera shot, the decoder reads 100 bits, BCH corrects them, the seal opens. All
-// three ONNX models run in onnxruntime-web on the CPU and are kept on the device after one download.
+// three ONNX models run in onnxruntime-web (on the graphics chip where possible) and are kept on the device.
 // research/ai-watermarks/ has how they are built (onnx_export.py) and every measurement behind the numbers here.
 //
 // No DOM beyond canvases: pages pass callbacks for progress and status. Used by the main page and the lab.
-import * as ort from "../vendor/onnxruntime-web/ort.wasm.min.mjs";
 import { correct, decodePayload, encode } from "./bch.js?v=dev";
 import { ALPHABET, capacity, openSealed, seal } from "./tmseal.js?v=dev";
 
 export { ALPHABET };
 
-ort.env.wasm.wasmPaths = new URL("../vendor/onnxruntime-web/", import.meta.url).href;
-ort.env.wasm.numThreads = 1;  // threads need cross-origin isolation, which GitHub Pages can't turn on
-
 const tick = () => new Promise(r => setTimeout(r, 30));  // let the page paint before heavy work
 
-// ---- models ----------------------------------------------------------------------------------------------
+// ---- models and runtime ----------------------------------------------------------------------------------
 
-// Models are kept on the device in Cache Storage, so they download once, not per visit or per deploy.
-// Bump the version when a model file changes (onnx_export.py or Adobe's pinned files): the old copies are
-// then deleted and the new ones fetched.
+// Models are kept on the device in Cache Storage, so they download once, not per visit or per deploy, and so
+// is the runtime's WebAssembly. Bump the version when a model file changes (onnx_export.py or Adobe's pinned
+// files) or when the vendored onnxruntime-web is updated: the old copies are then deleted and new ones fetched.
 const MODEL_CACHE = "zolal-tm-models-2";
 export const DETECTORS = { fast: "detector_Q_fp16w.onnx", small: "detector_Q_int8.onnx" };
 const ENCODER = "encoder_Q.onnx", DECODER = "decoder_Q.onnx";
 const url = name => new URL("models/" + name, import.meta.url).href;
+const VENDOR = new URL("../vendor/onnxruntime-web/", import.meta.url).href;
+
+// Where the models run. Reading (detector and decoder) uses the graphics chip (WebGPU) where the browser offers
+// it: on a MacBook it found the picture 2.2× faster (1.3 s instead of 2.8 s) and read bits 8.7× faster (19 ms
+// instead of 165 ms), with identical boxes and bits. Hiding (the encoder) always uses the CPU build: on WebGPU
+// its output differed by up to 0.15 from the CPU's (its whole change is at most ~0.56) and the mark didn't read
+// back, and the WebGPU build's own CPU path ran it ~6× slower. Elsewhere, or if WebGPU fails, everything uses
+// the CPU build, one thread (threads need cross-origin isolation, which GitHub Pages can't turn on).
+const RUNTIMES = {
+  cpu: { module: "ort.wasm.min.mjs", wasm: "ort-wasm-simd-threaded.wasm", ep: "wasm" },  // 14 MB
+  webgpu: { module: "ort.webgpu.min.mjs", wasm: "ort-wasm-simd-threaded.asyncify.wasm", ep: "webgpu" },  // 27 MB
+};
+const rts = {};  // loaded onnxruntime-web modules, by runtime name
+let reader = "cpu";  // the runtime the detector and decoder use
+const runtimeOf = name => (name === ENCODER ? "cpu" : reader);
 const sessions = {};
 let modelCache;  // undefined until opened; null where Cache Storage is unavailable (some private windows)
 
@@ -42,12 +53,12 @@ async function openCache() {
   return modelCache;
 }
 
-// The model's bytes: from the device's cache, else downloaded (reporting each chunk) and cached.
-async function modelBytes(name, onChunk = () => {}) {
-  const cache = await openCache(), hit = cache && await cache.match(url(name));
+// A file's bytes: from the device's cache, else downloaded (reporting each chunk) and cached.
+async function fileBytes(href, onChunk = () => {}) {
+  const cache = await openCache(), hit = cache && await cache.match(href);
   if (hit) return hit.arrayBuffer();
-  const res = await fetch(url(name));
-  if (!res.ok) throw new Error(`the model ${name} is missing (HTTP ${res.status})`);
+  const res = await fetch(href);
+  if (!res.ok) throw new Error(`${href.split("/").pop()} is missing (HTTP ${res.status})`);
   const parts = [];
   for (const reader = res.body.getReader(); ;) {
     const { done, value } = await reader.read();
@@ -55,53 +66,87 @@ async function modelBytes(name, onChunk = () => {}) {
     parts.push(value); onChunk(value.length);
   }
   const blob = new Blob(parts);
-  // a full disk shouldn't stop this visit; the model just downloads again next time
-  if (cache) await cache.put(url(name), new Response(blob)).catch(() => {});
+  // a full disk shouldn't stop this visit; the file just downloads again next time
+  if (cache) await cache.put(href, new Response(blob)).catch(() => {});
   return blob.arrayBuffer();
 }
 
+async function wantsWebGPU(prefer) {
+  if (prefer === "cpu" || !navigator.gpu) return false;
+  try { return !!await navigator.gpu.requestAdapter(); } catch { return false; }
+}
+
+async function runtime(name) {
+  if (!rts[name]) {
+    const r = RUNTIMES[name], mod = await import(VENDOR + r.module);
+    mod.env.wasm.wasmPaths = VENDOR;
+    mod.env.wasm.numThreads = 1;
+    mod.env.wasm.wasmBinary = await fileBytes(VENDOR + r.wasm);  // from the cache, not fetched by the runtime
+    rts[name] = mod;
+  }
+  return rts[name];
+}
+
+async function createSession(name) {
+  const rt = runtimeOf(name);
+  return (await runtime(rt)).InferenceSession.create(await fileBytes(url(name)), { executionProviders: [RUNTIMES[rt].ep] });
+}
+
 function model(name) {
-  sessions[name] ??= modelBytes(name).then(b => ort.InferenceSession.create(b))
-    .catch(e => { delete sessions[name]; throw e; });
+  sessions[name] ??= loadModels().then(() => createSession(name)).catch(e => { delete sessions[name]; throw e; });
   return sessions[name];
 }
 
 let loading = null;
 // Download what the device doesn't have yet, then prepare every model, so hiding and revealing start at once.
 // onProgress({ phase: "download", done, total }) in bytes, then ({ phase: "prepare", step, steps }).
-// Resolves to whether the models stay on the device for next time.
-export function loadModels({ detector = DETECTORS.fast, onProgress = () => {} } = {}) {
+// Resolves to { kept: whether the files stay on the device, engine: what reading runs on, "webgpu" or
+// "cpu" }. `engine: "cpu"` keeps reading on the CPU too (for comparison in the lab).
+export function loadModels({ detector = DETECTORS.fast, onProgress = () => {}, engine: prefer = "auto" } = {}) {
   loading ??= (async () => {
-    const names = [ENCODER, DECODER, detector];
     const cache = await openCache();
+    const names = [ENCODER, DECODER, detector];
+    const gpu = await wantsWebGPU(prefer);
+    const files = [...names.map(url), ...["cpu", ...(gpu ? ["webgpu"] : [])].map(r => VENDOR + RUNTIMES[r].wasm)];
     const missing = [];
-    for (const n of names) if (!(cache && await cache.match(url(n)))) missing.push(n);
+    for (const h of files) if (!(cache && await cache.match(h))) missing.push(h);
     if (missing.length) {
       // sizes first, so progress covers the whole download
-      const sizes = await Promise.all(missing.map(n => fetch(url(n), { method: "HEAD" })
+      const sizes = await Promise.all(missing.map(h => fetch(h, { method: "HEAD" })
         .then(r => +r.headers.get("content-length") || 0)));
       const total = sizes.reduce((a, b) => a + b, 0);
       let done = 0;
       onProgress({ phase: "download", done, total });
-      for (const n of missing) await modelBytes(n, k => { done += k; onProgress({ phase: "download", done, total }); });
+      for (const h of missing) await fileBytes(h, k => { done += k; onProgress({ phase: "download", done, total }); });
     }
-    for (const [i, n] of names.entries()) {
-      onProgress({ phase: "prepare", step: i + 1, steps: names.length }); await tick();
-      await model(n);
+    const prepare = async () => {
+      for (const [i, n] of names.entries()) {
+        onProgress({ phase: "prepare", step: i + 1, steps: names.length }); await tick();
+        sessions[n] = createSession(n);
+        await sessions[n];
+      }
+    };
+    reader = gpu ? "webgpu" : "cpu";
+    try { await prepare(); } catch (e) {
+      if (reader === "cpu") throw e;
+      console.warn("photo mark: WebGPU failed, reading on the CPU", e);
+      reader = "cpu";
+      for (const k of Object.keys(sessions)) delete sessions[k];
+      await prepare();
     }
-    return cache !== null;
+    return { kept: cache !== null, engine: reader };
   })().catch(e => { loading = null; throw e; });
   return loading;
 }
 
 // ---- pixels --------------------------------------------------------------------------------------------
 
-// pixels of a canvas as a CHW float tensor, values mapped by f
-function tensor(canvas, dims, f) {
+// pixels of a canvas as a CHW float tensor, values mapped by f, for a session of runtime `rt`
+function tensor(canvas, dims, f, rt = reader) {
   const { width: w, height: h } = canvas, px = canvas.getContext("2d").getImageData(0, 0, w, h).data;
   const out = new Float32Array(3 * w * h);
   for (let i = 0; i < w * h; i++) for (let c = 0; c < 3; c++) out[c * w * h + i] = f(px[4 * i + c] / 255);
-  return new ort.Tensor("float32", out, dims);
+  return new rts[rt].Tensor("float32", out, dims);
 }
 
 function draw(src, w, h, sx = 0, sy = 0, sw = src.width, sh = src.height, target) {
@@ -153,10 +198,10 @@ const MAX_PIXELS = 16_000_000;
 // encoder at 256×256, then the change it made is scaled up and added to the full-resolution pixels `px`.
 // The cover is read from the canvas `full`, which still holds the original: px is written back at the end.
 async function markRegion(enc, full, px, W, [L, T, RW, RH], bits, strength) {
-  const cover = tensor(draw(full, 256, 256, L, T, RW, RH), [1, 3, 256, 256], v => v * 2 - 1);
+  const cover = tensor(draw(full, 256, 256, L, T, RW, RH), [1, 3, 256, 256], v => v * 2 - 1, "cpu");
   const out = await enc.run({
     [enc.inputNames[0]]: cover,
-    [enc.inputNames[1]]: new ort.Tensor("float32", Float32Array.from(bits, Number), [1, 100]),
+    [enc.inputNames[1]]: new rts.cpu.Tensor("float32", Float32Array.from(bits, Number), [1, 100]),
   });
 
   // residual = what the encoder changed, minus any colour shift (per-channel mean), as in TrustMark

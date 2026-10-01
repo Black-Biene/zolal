@@ -18,9 +18,12 @@ self.addEventListener("activate", e => e.waitUntil(caches.keys()
 
 self.addEventListener("fetch", e => {
   const url = new URL(e.request.url);
-  // The photo mark's ~150 MB of models keep their own versioned cache (photomark/photomark.js); copying them
-  // into this per-deploy cache would store them twice and fetch them again on every deploy.
-  if (e.request.method !== "GET" || url.origin !== location.origin || url.pathname.includes("/photomark/models/")) return;
+  // The photo mark's ~150 MB of models and its runtime's WebAssembly keep their own versioned cache
+  // (photomark/photomark.js); copying them into this per-deploy cache would store them twice and fetch them
+  // again on every deploy.
+  const ownCache = url.pathname.includes("/photomark/models/")
+    || /\/vendor\/onnxruntime-web\/.*\.wasm$/.test(url.pathname);
+  if (e.request.method !== "GET" || url.origin !== location.origin || ownCache) return;
   e.respondWith(fetch(e.request).then(res => {
     if (res.ok) { const copy = res.clone(); caches.open(CACHE).then(c => c.put(e.request, copy)); }
     return res;

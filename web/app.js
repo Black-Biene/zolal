@@ -422,7 +422,7 @@ function ensureModels() {
         text.textContent = `Getting the photo mark ready (${p.step} of ${p.steps})…`;
       }
     }),
-  })).then(kept => {
+  })).then(({ kept }) => {
     each((bar, text) => {
       bar.hidden = true;
       text.textContent = kept ? "Photo mark ready. It's saved on this device and works offline."

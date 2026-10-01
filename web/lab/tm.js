@@ -14,8 +14,9 @@ async function prepare() {
   const bar = $("load-bar"), text = $("load-text"), buttons = [$("m-go"), $("r-go")];
   buttons.forEach(b => { b.disabled = true; });
   try {
-    const kept = await loadModels({
+    const { kept, engine } = await loadModels({
       detector: $("det").value,
+      engine: new URLSearchParams(location.search).get("engine") ?? "auto",  // ?engine=cpu to compare
       onProgress: p => {
         if (p.phase === "download") {
           bar.max = p.total || 1; bar.value = p.done;
@@ -27,9 +28,10 @@ async function prepare() {
       },
     });
     bar.hidden = true;
-    text.textContent = kept
+    const where = engine === "webgpu" ? "on the graphics chip (WebGPU)" : "on the CPU";
+    text.textContent = (kept
       ? "Ready. The models are saved on this device, so this works offline next time."
-      : "Ready. (This browser can't keep the models, so they download again next visit.)";
+      : "Ready. (This browser can't keep the models, so they download again next visit.)") + ` Running ${where}.`;
     buttons.forEach(b => { b.disabled = false; });
   } catch (err) {
     bar.hidden = true;
