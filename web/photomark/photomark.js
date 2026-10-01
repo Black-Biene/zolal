@@ -87,9 +87,17 @@ async function runtime(name) {
   return rts[name];
 }
 
+// Phone memory is the limit (Safari kills the page past it), so on WebGPU the detector skips ONNX Runtime's
+// graph optimisation: that pass turns its fp16 weights into a 166 MB fp32 copy. Without it the weights stay
+// fp16 and are cast on the graphics chip each run: same boxes, same ~0.2 s per run on a MacBook, and quicker to
+// prepare (0.2 s instead of 0.5 s).
 async function createSession(name) {
-  const rt = runtimeOf(name);
-  return (await runtime(rt)).InferenceSession.create(await fileBytes(url(name)), { executionProviders: [RUNTIMES[rt].ep] });
+  const rt = runtimeOf(name), mod = await runtime(rt);
+  const lean = rt === "webgpu" && name !== DECODER;
+  const session = await mod.InferenceSession.create(await fileBytes(url(name)),
+    { executionProviders: [RUNTIMES[rt].ep], ...(lean && { graphOptimizationLevel: "disabled" }) });
+  mod.env.wasm.wasmBinary = undefined;  // the runtime has started; let its 14–27 MB of bytes go
+  return session;
 }
 
 function model(name) {
@@ -106,9 +114,12 @@ let loading = null;
 export function loadModels({ detector = DETECTORS.fast, onProgress = () => {}, engine: prefer = "cpu" } = {}) {
   loading ??= (async () => {
     const cache = await openCache();
-    const names = [ENCODER, DECODER, detector];
     const gpu = await wantsWebGPU(prefer);
-    const files = [...names.map(url), ...["cpu", ...(gpu ? ["webgpu"] : [])].map(r => VENDOR + RUNTIMES[r].wasm)];
+    // With WebGPU only reading is prepared now; the encoder and the CPU runtime it needs load on the first hide,
+    // so a phone never holds both runtimes just to read. Everything is still downloaded now.
+    const names = gpu ? [DECODER, detector] : [ENCODER, DECODER, detector];
+    const files = [ENCODER, DECODER, detector].map(url)
+      .concat(["cpu", ...(gpu ? ["webgpu"] : [])].map(r => VENDOR + RUNTIMES[r].wasm));
     const missing = [];
     for (const h of files) if (!(cache && await cache.match(h))) missing.push(h);
     if (missing.length) {
