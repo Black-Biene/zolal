@@ -30,12 +30,15 @@ const VENDOR = new URL("../vendor/onnxruntime-web/", import.meta.url).href;
 // instead of 165 ms), with identical boxes and bits. Hiding (the encoder) always uses the CPU build: on WebGPU
 // its output differed by up to 0.15 from the CPU's (its whole change is at most ~0.56) and the mark didn't read
 // back, and the WebGPU build's own CPU path ran it ~6× slower. Elsewhere, or if WebGPU fails, everything uses
-// the CPU build, one thread (threads need cross-origin isolation, which GitHub Pages can't turn on).
+// the CPU build. The CPU build uses several cores when the page is cross-origin isolated (sw.js adds the
+// headers GitHub Pages can't send), else one.
 const RUNTIMES = {
   cpu: { module: "ort.wasm.min.mjs", wasm: "ort-wasm-simd-threaded.wasm", ep: "wasm" },  // 14 MB
   webgpu: { module: "ort.webgpu.min.mjs", wasm: "ort-wasm-simd-threaded.asyncify.wasm", ep: "webgpu" },  // 27 MB
 };
 const rts = {};  // loaded onnxruntime-web modules, by runtime name
+// CPU threads: up to 4 (phones have 4–6 cores, some of them slow) where the page is isolated, else 1
+const threads = globalThis.crossOriginIsolated ? Math.max(1, Math.min(4, navigator.hardwareConcurrency || 1)) : 1;
 let reader = "cpu";  // the runtime the detector and decoder use
 const runtimeOf = name => (name === ENCODER ? "cpu" : reader);
 const sessions = {};
@@ -71,8 +74,12 @@ async function fileBytes(href, onChunk = () => {}) {
   return blob.arrayBuffer();
 }
 
+// "auto" uses WebGPU only in desktop Chrome and Edge, the only browsers that say they're not on a phone
+// (userAgentData.mobile) and where it was tested. Safari's WebGPU crashed the page on an iPhone, even with
+// one runtime and no fp32 detector copy, and Chrome on iPhone is Safari underneath.
 async function wantsWebGPU(prefer) {
-  if (prefer !== "webgpu" || !navigator.gpu) return false;
+  const desktopChromium = navigator.userAgentData?.mobile === false;
+  if (prefer === "cpu" || (prefer === "auto" && !desktopChromium) || !navigator.gpu) return false;
   try { return !!await navigator.gpu.requestAdapter(); } catch { return false; }
 }
 
@@ -80,7 +87,7 @@ async function runtime(name) {
   if (!rts[name]) {
     const r = RUNTIMES[name], mod = await import(VENDOR + r.module);
     mod.env.wasm.wasmPaths = VENDOR;
-    mod.env.wasm.numThreads = 1;
+    mod.env.wasm.numThreads = name === "cpu" ? threads : 1;
     mod.env.wasm.wasmBinary = await fileBytes(VENDOR + r.wasm);  // from the cache, not fetched by the runtime
     rts[name] = mod;
   }
@@ -109,9 +116,9 @@ let loading = null;
 // Download what the device doesn't have yet, then prepare every model, so hiding and revealing start at once.
 // onProgress({ phase: "download", done, total }) in bytes, then ({ phase: "prepare", step, steps }).
 // Resolves to { kept: whether the files stay on the device, engine: what reading runs on, "webgpu" or
-// "cpu" }. Reading runs on the CPU unless `engine: "webgpu"` is asked for (the lab's ?engine=webgpu): on an
-// iPhone, holding both runtimes and the models on the graphics chip made Safari kill the page.
-export function loadModels({ detector = DETECTORS.fast, onProgress = () => {}, engine: prefer = "cpu" } = {}) {
+// "cpu", threads: CPU threads }. `engine` is "auto" (see wantsWebGPU), or "webgpu" / "cpu" to force one (the
+// lab's ?engine=).
+export function loadModels({ detector = DETECTORS.fast, onProgress = () => {}, engine: prefer = "auto" } = {}) {
   loading ??= (async () => {
     const cache = await openCache();
     const gpu = await wantsWebGPU(prefer);
@@ -146,7 +153,7 @@ export function loadModels({ detector = DETECTORS.fast, onProgress = () => {}, e
       for (const k of Object.keys(sessions)) delete sessions[k];
       await prepare();
     }
-    return { kept: cache !== null, engine: reader };
+    return { kept: cache !== null, engine: reader, threads };
   })().catch(e => { loading = null; throw e; });
   return loading;
 }

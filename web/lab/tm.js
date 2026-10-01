@@ -14,9 +14,9 @@ async function prepare() {
   const bar = $("load-bar"), text = $("load-text"), buttons = [$("m-go"), $("r-go")];
   buttons.forEach(b => { b.disabled = true; });
   try {
-    const { kept, engine } = await loadModels({
+    const { kept, engine, threads } = await loadModels({
       detector: $("det").value,
-      engine: new URLSearchParams(location.search).get("engine") ?? "cpu",  // ?engine=webgpu to test
+      engine: new URLSearchParams(location.search).get("engine") ?? "auto",  // ?engine=webgpu or =cpu to force
       onProgress: p => {
         if (p.phase === "download") {
           bar.max = p.total || 1; bar.value = p.done;
@@ -28,7 +28,7 @@ async function prepare() {
       },
     });
     bar.hidden = true;
-    const where = engine === "webgpu" ? "on the graphics chip (WebGPU)" : "on the CPU";
+    const where = engine === "webgpu" ? "on the graphics chip (WebGPU)" : `on the CPU (${threads} thread${threads > 1 ? "s" : ""})`;
     text.textContent = (kept
       ? "Ready. The models are saved on this device, so this works offline next time."
       : "Ready. (This browser can't keep the models, so they download again next visit.)") + ` Running ${where}.`;
@@ -119,4 +119,19 @@ for (const tab of tabs) tab.onclick = () => {
   }
 };
 
-prepare();
+// Several CPU threads need cross-origin isolation, which the site's offline worker adds (sw.js). The first
+// visit isn't served by it yet, so once it is in charge the page reloads once; a session flag stops a loop.
+async function isolate() {
+  if (globalThis.crossOriginIsolated || !navigator.serviceWorker) return;
+  try {
+    await navigator.serviceWorker.register("../sw.js");
+    await navigator.serviceWorker.ready;
+    if (!sessionStorage.getItem("zolal-isolate-reload")) {
+      sessionStorage.setItem("zolal-isolate-reload", "1");
+      location.reload();
+      return new Promise(() => {});  // nothing else runs: the page is going away
+    }
+  } catch { /* storage or worker blocked: carry on with one thread */ }
+}
+
+isolate().then(prepare);

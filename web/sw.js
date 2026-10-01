@@ -16,6 +16,19 @@ self.addEventListener("activate", e => e.waitUntil(caches.keys()
   .then(keys => Promise.all(keys.filter(k => k.startsWith("zolal-?v=") && k !== CACHE).map(k => caches.delete(k))))
   .then(() => self.clients.claim())));
 
+// Cross-origin isolation, which browsers require before a page may use several CPU cores (SharedArrayBuffer):
+// GitHub Pages can't send the two headers, so this worker adds them to the pages listed here. Same-origin
+// files need nothing more. Scripts get the headers too, so the runtime's worker threads are isolated as well.
+// Only the lab's test bench for now; the main page follows once phones have been tested.
+const ISOLATED_PAGES = /\/lab\/tm\.html$/;
+function isolate(res) {
+  if (!res || res.type === "opaque" || res.type === "opaqueredirect") return res;
+  const headers = new Headers(res.headers);
+  headers.set("Cross-Origin-Opener-Policy", "same-origin");
+  headers.set("Cross-Origin-Embedder-Policy", "require-corp");
+  return new Response(res.body, { status: res.status, statusText: res.statusText, headers });
+}
+
 self.addEventListener("fetch", e => {
   const url = new URL(e.request.url);
   // The photo mark's ~150 MB of models and its runtime's WebAssembly keep their own versioned cache
@@ -24,8 +37,11 @@ self.addEventListener("fetch", e => {
   const ownCache = url.pathname.includes("/photomark/models/")
     || /\/vendor\/onnxruntime-web\/.*\.wasm$/.test(url.pathname);
   if (e.request.method !== "GET" || url.origin !== location.origin || ownCache) return;
+  const page = e.request.mode === "navigate";
+  const wrap = page ? (ISOLATED_PAGES.test(url.pathname) ? isolate : r => r)
+    : /\.m?js$/.test(url.pathname) ? isolate : r => r;
   e.respondWith(fetch(e.request).then(res => {
     if (res.ok) { const copy = res.clone(); caches.open(CACHE).then(c => c.put(e.request, copy)); }
-    return res;
-  }).catch(() => caches.match(e.request, { ignoreSearch: true })));
+    return wrap(res);
+  }).catch(() => caches.match(e.request, { ignoreSearch: true }).then(wrap)));
 });
