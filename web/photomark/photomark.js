@@ -194,9 +194,10 @@ async function markRegion(enc, full, px, W, [L, T, RW, RH], bits, strength) {
 // Hide `text` in `source` (a File/Blob, or an ImageBitmap/canvas the page decoded itself, e.g. from HEIC).
 // Returns the marked canvas and whether the text reads straight back from it.
 // `strength` scales the mark, as TrustMark's WM_STRENGTH does. 1.0 survives screens, screenshots and chat apps;
-// printing needs 1.5 (Adobe's FAQ; a print of a 1.0 mark came back with ~20 of 96 bits wrong, 5 are fixable),
-// at ~3.4 dB less PSNR (40 -> 37 dB on the owner's photos), i.e. a little more visible.
-export const PRINT_STRENGTH = 1.5;
+// printing needs more. Adobe's FAQ says 1.5; on the owner's office printer a 1.0 print came back with ~20 of 96
+// bits wrong and a 1.5 print with ~13 (5 are fixable), while a 2.0 print read correctly (2.5 didn't, once).
+// Cost: ~6 dB less PSNR (40 -> 34 dB on the owner's photos), noticeable up close in calm areas.
+export const PRINT_STRENGTH = 2;
 export async function hideText(source, text, password, { onStatus = () => {}, strength = 1 } = {}) {
   onStatus("Opening the photo…"); await tick();
   const bmp = await bitmap(source);

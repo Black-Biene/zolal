@@ -138,6 +138,9 @@ A lake photo marked with a 5-character text (one BCH_5 mark, strength 1.0), prin
   to 41 password checks each, and combined with the search still missed, after 56 password checks.
 - Visibility by strength (Adobe's encoder, ramen photo): 1.0 40.0 dB, 1.5 36.7, 2.0 34.2, 2.5 32.4. The lab now
   has a strength choice (1.0/1.5/2.0/2.5) to test one print at several strengths.
+- **Strength 2.0 and 2.5, printed** (2026-10-01, the owner's office printer): 2.0 read correctly on the phone;
+  2.5 did not (one try each; at 2.5 more of the change may clip in very bright and very dark areas). The main
+  page's *Stronger mark for printing* now uses 2.0.
 
 ## Browser-sized models (ONNX)
 
