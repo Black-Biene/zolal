@@ -72,7 +72,7 @@ async function fileBytes(href, onChunk = () => {}) {
 }
 
 async function wantsWebGPU(prefer) {
-  if (prefer === "cpu" || !navigator.gpu) return false;
+  if (prefer !== "webgpu" || !navigator.gpu) return false;
   try { return !!await navigator.gpu.requestAdapter(); } catch { return false; }
 }
 
@@ -101,8 +101,9 @@ let loading = null;
 // Download what the device doesn't have yet, then prepare every model, so hiding and revealing start at once.
 // onProgress({ phase: "download", done, total }) in bytes, then ({ phase: "prepare", step, steps }).
 // Resolves to { kept: whether the files stay on the device, engine: what reading runs on, "webgpu" or
-// "cpu" }. `engine: "cpu"` keeps reading on the CPU too (for comparison in the lab).
-export function loadModels({ detector = DETECTORS.fast, onProgress = () => {}, engine: prefer = "auto" } = {}) {
+// "cpu" }. Reading runs on the CPU unless `engine: "webgpu"` is asked for (the lab's ?engine=webgpu): on an
+// iPhone, holding both runtimes and the models on the graphics chip made Safari kill the page.
+export function loadModels({ detector = DETECTORS.fast, onProgress = () => {}, engine: prefer = "cpu" } = {}) {
   loading ??= (async () => {
     const cache = await openCache();
     const names = [ENCODER, DECODER, detector];

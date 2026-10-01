@@ -16,7 +16,7 @@ async function prepare() {
   try {
     const { kept, engine } = await loadModels({
       detector: $("det").value,
-      engine: new URLSearchParams(location.search).get("engine") ?? "auto",  // ?engine=cpu to compare
+      engine: new URLSearchParams(location.search).get("engine") ?? "cpu",  // ?engine=webgpu to test
       onProgress: p => {
         if (p.phase === "download") {
           bar.max = p.total || 1; bar.value = p.done;
