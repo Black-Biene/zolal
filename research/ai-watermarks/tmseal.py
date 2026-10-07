@@ -4,7 +4,7 @@ The text is 6-bit characters from ALPHABET: a single mark's 61 bits hold 6, a fo
 hold 32. K = Argon2id(password, salt "zolal-tm2" + nonce), with the Rust engine's settings (48 MiB, 3 passes,
 1 lane, 32 bytes); the keystream is HMAC(K, "enc") and the tag HMAC(K, "tag" + nonce|ciphertext), truncated.
 The tag rejects a wrong password and random reads that happen to pass BCH (1 in 65536). "zolal-tm2" names
-this format; tm1 (PBKDF2) marks were test marks only and no longer open. web/lab/tmseal.js is the browser
+this format; tm1 (PBKDF2) marks were test marks only and no longer open. web/photomark/tmseal.js is the browser
 twin; `python tmseal.py` checks this file. Needs: pip install argon2-cffi
 """
 import hmac

@@ -5,6 +5,9 @@ print? This folder holds a test kit for [Adobe TrustMark](https://github.com/ado
 100-bit payload, about 8 ASCII characters of text with its default error correction). It runs on a laptop;
 the model files download on first use.
 
+The result ships on the main page as the **photo mark** (`web/photomark/`). The lab test pages mentioned below
+(`web/lab/tm.html`) were retired on 2026-10-07; they are in git history up to commit 9a39dec.
+
 ## Setup (macOS / Linux)
 
 ```bash

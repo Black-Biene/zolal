@@ -400,7 +400,7 @@ $("reveal").onclick = async () => {
 // ---- photo mark ----------------------------------------------------------------------------------------
 //
 // A short text hidden in a photo so that it survives chat apps, screenshots and camera shots (photomark/,
-// shared with the lab). Its code and ~150 MB of models load only when this mode is chosen, once per device.
+// web/photomark/). Its code and ~150 MB of models load only when this mode is chosen, once per device.
 
 let photomark = null;
 const pm = () => (photomark ??= import("./photomark/photomark.js?v=dev").catch(e => { photomark = null; throw e; }));

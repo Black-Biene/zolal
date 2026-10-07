@@ -6,7 +6,7 @@
 // three ONNX models run in onnxruntime-web (on the graphics chip where possible) and are kept on the device.
 // research/ai-watermarks/ has how they are built (onnx_export.py) and every measurement behind the numbers here.
 //
-// No DOM beyond canvases: pages pass callbacks for progress and status. Used by the main page and the lab.
+// No DOM beyond canvases: pages pass callbacks for progress and status. Used by the main page.
 import { correct, decodePayload, encode } from "./bch.js?v=dev";
 import { ALPHABET, capacity, openSealed, seal } from "./tmseal.js?v=dev";
 
@@ -116,8 +116,7 @@ let loading = null;
 // Download what the device doesn't have yet, then prepare every model, so hiding and revealing start at once.
 // onProgress({ phase: "download", done, total }) in bytes, then ({ phase: "prepare", step, steps }).
 // Resolves to { kept: whether the files stay on the device, engine: what reading runs on, "webgpu" or
-// "cpu", threads: CPU threads }. `engine` is "auto" (see wantsWebGPU), or "webgpu" / "cpu" to force one (the
-// lab's ?engine=).
+// "cpu", threads: CPU threads }. `engine` is "auto" (see wantsWebGPU), or "webgpu" / "cpu" to force one.
 export function loadModels({ detector = DETECTORS.fast, onProgress = () => {}, engine: prefer = "auto" } = {}) {
   loading ??= (async () => {
     const cache = await openCache();

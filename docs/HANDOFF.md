@@ -10,7 +10,6 @@ Everything a new chat needs to continue this project. Last updated 2026-09-26.
 - Repo: https://github.com/Black-Biene/zolal (renamed from `zolal-core`; old links redirect). Public.
 - Live site: https://black-biene.github.io/zolal/ (every push to `main` rebuilds it via
   `.github/workflows/pages.yml`, about a minute).
-- Camera test page ("lab"): https://black-biene.github.io/zolal/lab/ (not linked from the main page, noindex).
 - Licence: Apache-2.0; `NOTICE` requires crediting Black Biene. `CONTRIBUTING.md` invites pull requests.
 - There is no app any more: the iOS bridge (`zolal-ffi`, `build-xcframework.sh`) was deleted on request.
   Zolal is the Rust engine, the CLI and the web page.
@@ -35,8 +34,7 @@ Everything a new chat needs to continue this project. Last updated 2026-09-26.
 | `crates/zolal-cli` | CLI (`hide`, `reveal`, `clean`, `probe`); compiled to `wasm32-wasip1` for the web page |
 | `web/` | The site: `index.html`, `app.js`, `style.css`, `sw.js` (offline), `manifest.webmanifest`, icons |
 | `web/vendor/` | `browser_wasi_shim` 0.4.1 (MIT) and `libheif` WASM from libheif-js 1.23.2 (LGPL-3.0, for HEIC) |
-| `web/photomark/` | **Photo mark** (TrustMark): `photomark.js`, `tmseal.js`, `bch.js`; models built by the Pages workflow into `models/` (git-ignored). Used by the main page and the lab |
-| `web/lab/` | Camera-readable hidden text experiment (`wm.js` engine, `lab.js` UI, `worker.js`); `tm.html`/`tm.js`: photo mark test bench |
+| `web/photomark/` | **Photo mark** (TrustMark): `photomark.js`, `tmseal.js`, `bch.js`; models built by the Pages workflow into `models/` (git-ignored). Used by the main page |
 | `research/camera-watermark/` | Python prototype + simulated channels + results for our own method |
 | `research/ai-watermarks/` | `tm_test.py`: test kit for Adobe TrustMark, run on the owner's laptop |
 
@@ -65,7 +63,7 @@ Checks: `cargo fmt --all`, `cargo clippy --workspace --all-targets -- -D warning
 Goal: hide a short, password-protected text in a normal-looking picture so a phone camera pointed at it (on a
 screen, printed, or received through Telegram as a normal photo) can read it back.
 
-### Our own method (`web/lab/`, `research/camera-watermark/`)
+### Our own method (`research/camera-watermark/`; its `web/lab/` page was retired 2026-10-07)
 
 Spread-spectrum pattern in the blue-yellow chroma (Cb) channel, ~10,400 cells, 1024 raw bits, rate-1/3
 convolutional code + soft Viterbi → 41 bytes (38 bytes of text + length + CRC-16). Grid shape follows the
@@ -100,18 +98,22 @@ This is the **first real-camera success**.
    Telegram as a normal photo, the white diagram (+ check `out/*-compare.png` for visibility), print.
 2. ~~Model sizes~~ done: `research/ai-watermarks/onnx_export.py` builds ONNX reader models; smallest working
    pair is int8 detector (42 MB) + Adobe's fp16 decoder (47 MB) = 89 MB. See that folder's README.
-   **Browser reader works on the iPhone:** `web/lab/tm.html` (models in git-ignored `web/photomark/models/`, serve
-   locally with `.claude/launch.json`) read a fresh camera shot in ~4.5 s, and a camera shot sent through
-   Telegram. Live at https://black-biene.github.io/zolal/lab/tm.html (linked from the lab page): the Pages
-   workflow builds the models with `onnx_export.py` and caches them. Scan close up, like a QR code; distance is
-   not a goal. **Password layer done** (`tmseal.py` / `web/photomark/tmseal.js`): 6 characters (32 with four quarters), Argon2id key (format `zolal-tm2`, frozen), 16-bit
-   tag; mark on the page's *Hide* tab or with `tm_test.py mark PHOTO TEXT PASSWORD`. Details and limits in the
-   research README. **Up to 32 characters** with four quarter marks and a spare (research README). Next idea: WebGPU for speed (ORT's webgpu build, ~28 MB), with the CPU path as fallback.
-3. If TrustMark holds up: run it in the browser with ONNX Runtime Web (Adobe ships ONNX models for its JS/Rust
-   ports), vendor the models into `web/` (MIT allows it), and design a compact password layer (61 bits leaves
-   ~5–6 characters after a check; e.g. Argon2id-derived keystream + short check value).
-4. Meanwhile, for our own lab method: restore invisibility (lower strength on plain areas, finder gain back
-   to 1.0) and state that it suits busy photos only.
+   **Browser reader works on the iPhone:** first proven on the (now retired) lab test bench, today the main
+   page's photo mark (models in git-ignored `web/photomark/models/`, serve locally with `.claude/launch.json`)
+   read a fresh camera shot in ~4.5 s, and a camera shot sent through Telegram. The Pages workflow builds the
+   models with `onnx_export.py` and caches them. Scan close up, like a QR code; distance is not a goal.
+   **Password layer done** (`tmseal.py` / `web/photomark/tmseal.js`): 6 characters (32 with four quarters), Argon2id key (format `zolal-tm2`, frozen), 16-bit
+   tag; mark on the main page (Hide → Photo mark) or with `tm_test.py mark PHOTO TEXT PASSWORD`. Details and limits in the
+   research README. **Up to 32 characters** with four quarter marks and a spare (research README).
+   **Printing** needs the stronger mark (strength 2.0, the main page's checkbox) and 6 characters or fewer.
+   **Speed** (2026-10-01..07): reading runs on WebGPU automatically in desktop Chrome/Edge only (detector ~14×,
+   decoder ~9× faster on a MacBook); Safari's WebGPU crashed the page on the iPhone, so phones use the CPU.
+   The lab test bench, cross-origin isolated by `sw.js`, ran the CPU with up to 4 threads on the owner's iPhone.
+   Both lab pages (`web/lab/`) were retired on 2026-10-07; the isolation code is in git history (commit 9a39dec,
+   `sw.js` ISOLATED_PAGES) for when the main page gets several threads. `photomark.js` already uses up to 4
+   threads whenever the page is cross-origin isolated.
+3. ~~Run TrustMark in the browser, password layer~~ done: the main page's photo mark.
+4. ~~Our own camera method~~ dropped: TrustMark replaced it; its lab page was retired 2026-10-07.
 5. Earlier backlog (CI workflow, PDF loop, `clean()`, walk limits: done 2026-09-30): a file-size limit on phones
    (the page loads whole files into memory); optionally a "remove hidden content" button (engine has `clean`).
 

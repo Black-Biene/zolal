@@ -1,7 +1,7 @@
 # hash-wasm (Argon2id)
 
-Derives the key for the lab's password-protected TrustMark marks (`web/lab/tmseal.js`), with the same
-Argon2id settings as the Rust engine. Loaded only by that page.
+Derives the key for password-protected photo marks (`web/photomark/tmseal.js`), with the same
+Argon2id settings as the Rust engine. Loaded only when the photo mark is used.
 
 - File: `argon2.umd.min.js` from the `dist/` folder of the npm package
   [`hash-wasm` 4.12.0](https://www.npmjs.com/package/hash-wasm/v/4.12.0), unmodified. The WebAssembly is

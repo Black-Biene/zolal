@@ -6,7 +6,9 @@ photo through Telegram or WhatsApp? This folder holds the feasibility prototype.
 
 Everything here is **simulated**: the channels in `channels.py` model compression, screen or print capture,
 perspective, blur, lighting, sensor noise and imprecise corner finding. They don't model moiré, a phone's own
-sharpening and denoising, motion blur or glare. Real-device testing is done with the lab page in `web/lab/`.
+sharpening and denoising, motion blur or glare. Real-device testing was done with the lab page in `web/lab/`,
+retired on 2026-10-07 (it never read from a real phone camera; Adobe TrustMark replaced it, see
+`research/ai-watermarks/`). The page is in git history up to commit 9a39dec.
 
 ## Method (`spread.py` + `conv.py`)
 

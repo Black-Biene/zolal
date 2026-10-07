@@ -1,8 +1,8 @@
 # Photo mark
 
 A short text (up to 32 characters) hidden in a photo so that it survives chat apps, screenshots and camera
-shots, locked with a passphrase. Used by the main page (Hide → Photo mark, Reveal → A photo mark) and by the
-lab's test bench (`lab/tm.html`). Everything runs on the device.
+shots, locked with a passphrase. Used by the main page (Hide → Photo mark, Reveal → A photo mark). Everything
+runs on the device.
 
 - `photomark.js`: hiding and reading; loads the models once and keeps them in Cache Storage.
 - `tmseal.js`: the passphrase layer (Argon2id + HMAC-SHA256), format `zolal-tm2`, frozen.

@@ -7,7 +7,7 @@ Usage:
 The decoder and encoder are Adobe's own ONNX files (the decoder already fp16). The picture detector has no ONNX
 release, so it is exported from the PyTorch checkpoint, then shrunk: fp16w stores weights as fp16 (maths stays fp32), int8 is
 onnxruntime's dynamic quantisation. The int8 decoder was tested and dropped: it lost camera decodes.
-Needs: requirements-export.txt (the Pages workflow runs this to put the models on the live lab page)
+Needs: requirements-export.txt (the Pages workflow runs this to put the models on the live site)
 """
 import hashlib
 import sys
