@@ -152,6 +152,49 @@ for (const radio of document.querySelectorAll('input[name="what"]')) {
   });
 }
 
+// ---- one step at a time --------------------------------------------------------------------------------
+//
+// Each panel shows one step; Next checks that step first. The last step's own button does the work (and checks
+// everything again).
+
+const STEP_NEEDS = {
+  "panel-hide": [
+    () => !$("hide-carrier").files.length && "Choose a cover file first.",
+    async () => {
+      const mode = hideMode();
+      if (mode === "files") return !$("hide-payload").files.length && "Choose the files to hide.";
+      if (mode === "text") return !$("hide-message").value.trim() && "Type the text to hide.";
+      if (!$("mark-text").value.trim()) return "Type the short text to hide.";
+      const { kind } = await carrierPlan($("hide-carrier").files[0]);
+      return kind !== "jpeg" && kind !== "image" && "A photo mark needs a photo. Go back and choose a photo as the cover file.";
+    },
+  ],
+  "panel-reveal": [
+    () => !$("reveal-carrier").files.length && (revealMode() === "mark" ? "Take or choose the photo first." : "Choose the file to open first."),
+  ],
+};
+for (const [id, needs] of Object.entries(STEP_NEEDS)) {
+  const panel = $(id), steps = [...panel.querySelectorAll(".step")], box = panel.querySelector(".status");
+  const back = panel.querySelector(".back"), next = panel.querySelector(".next"), done = next.nextElementSibling;
+  let at = 0;
+  const go = i => {
+    at = i;
+    steps.forEach((s, j) => { s.hidden = j !== i; });
+    back.hidden = i === 0;
+    next.hidden = i === steps.length - 1;
+    done.hidden = !next.hidden;
+    box.className = "status"; box.replaceChildren();
+  };
+  next.onclick = async () => {
+    const why = await needs[at]();
+    if (why) return show(box, "err", why);
+    go(at + 1);
+    steps[at].querySelector('input[type="password"]')?.focus();
+  };
+  back.onclick = () => go(at - 1);
+  go(0);
+}
+
 // ---- cover file: pass through what the engine takes, convert what it doesn't ---------------------------
 //
 // The engine hides in JPEG, MP4, PDF and MP3. Other photos are redrawn as JPEG; a MOV is relabelled as MP4,

@@ -116,6 +116,14 @@ textarea:focus { outline: 0; border-color: var(--accent); box-shadow: 0 0 0 3px 
 .primary:hover { background: var(--accent-hover) }
 .primary:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px }
 .primary:disabled { background: #94a3b8; cursor: default }
+.nav { display: flex; gap: 8px }
+.nav .primary { flex: 1; margin-top: 0 }
+.back {
+  font: inherit; font-weight: 600; padding: 13px 20px; border-radius: 12px; cursor: pointer;
+  border: 1px solid var(--line); background: var(--card); color: var(--ink);
+}
+.back:hover { border-color: var(--accent); color: var(--accent) }
+.back:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px }
 
 .status:empty { display: none }
 .status { margin: 0 0 16px; padding: 14px 16px; border-radius: 12px; border: 1px solid var(--line); background: var(--soft) }
@@ -193,10 +201,8 @@ textarea:focus { outline: 0; border-color: var(--accent); box-shadow: 0 0 0 3px 
   .callout p { margin-left: 30px }
   .status { margin-bottom: 12px; scroll-margin-bottom: 90px }
   .locked-note { font-size: .82rem }
-  .primary {
-    position: sticky; bottom: calc(10px + env(safe-area-inset-bottom)); z-index: 2; margin: 0;
-    box-shadow: 0 6px 20px rgb(10 79 140 / .28);
-  }
+  .nav { position: sticky; bottom: calc(10px + env(safe-area-inset-bottom)); z-index: 2 }
+  .primary { margin: 0; box-shadow: 0 6px 20px rgb(10 79 140 / .28) }
   .privacy { margin-top: 8px; padding: 0 16px; font-size: .8rem }
   .privacy svg { width: 18px; height: 18px }
   .credit { margin: 10px 0 16px; padding: 0 16px; font-size: .78rem }

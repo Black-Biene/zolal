@@ -1,5 +1,7 @@
 # Zolal
 
+English | [فارسی](README.fa.md)
+
 Hide encrypted files and messages inside ordinary photos, videos, songs and PDFs. The result still opens and
 plays normally.
 
