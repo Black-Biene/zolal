@@ -220,3 +220,6 @@ fieldset:disabled input.line { opacity: .45; cursor: not-allowed }
 .mark-load .hint { margin: 0 }
 .check { display: flex; align-items: baseline; gap: 8px; margin: 8px 0 0; font-size: .92rem; cursor: pointer }
 .check .hint { margin: 0 }
+.status.busy { flex-wrap: wrap }
+.status.busy > progress, .status.busy > .small { flex-basis: 100%; margin: 0 }
+.status progress { height: 8px; accent-color: var(--accent) }

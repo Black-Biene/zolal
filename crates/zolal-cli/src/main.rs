@@ -302,16 +302,20 @@ fn human(bytes: u64) -> String {
 }
 
 /// Prints a percentage to stderr when it changes, but only on a terminal: piped or logged
-/// output would otherwise fill with carriage-return noise.
+/// output would otherwise fill with carriage-return noise. With `ZOLAL_PROGRESS` set it prints
+/// `progress <done> <total>` lines instead, for a front end to read (the web page does).
 struct StderrProgress {
     enabled: bool,
+    lines: bool,
     last: AtomicU64,
 }
 
 impl Default for StderrProgress {
     fn default() -> Self {
+        let lines = std::env::var_os("ZOLAL_PROGRESS").is_some();
         Self {
-            enabled: std::io::stderr().is_terminal(),
+            enabled: lines || std::io::stderr().is_terminal(),
+            lines,
             last: AtomicU64::new(0),
         }
     }
@@ -319,7 +323,7 @@ impl Default for StderrProgress {
 
 impl StderrProgress {
     fn finish(&self) {
-        if self.enabled && self.last.load(Ordering::Relaxed) > 0 {
+        if self.enabled && !self.lines && self.last.load(Ordering::Relaxed) > 0 {
             eprintln!();
         }
     }
@@ -331,7 +335,12 @@ impl Progress for StderrProgress {
             return;
         }
         let pct = (done * 100 / total).max(1);
-        if self.last.swap(pct, Ordering::Relaxed) != pct {
+        if self.last.swap(pct, Ordering::Relaxed) == pct {
+            return;
+        }
+        if self.lines {
+            eprintln!("progress {done} {total}");
+        } else {
             eprint!("\r{pct:3}%");
         }
     }

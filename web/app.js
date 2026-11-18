@@ -1,7 +1,5 @@
 // Everything below runs locally: the shim and the wasm are this site's own files (see the CSP in index.html),
 // both are loaded up front, and files only ever go into an in-memory filesystem and back out as downloads.
-import { WASI, File, OpenFile, PreopenDirectory, ConsoleStdout } from "./vendor/browser_wasi_shim/index.js";
-
 const $ = id => document.getElementById(id);
 const wasm = fetch("zolal-cli.wasm?v=dev").then(r => WebAssembly.compileStreaming(r));
 wasm.catch(() => {
@@ -22,23 +20,29 @@ const CARRIER = ".zolal-carrier", OUTPUT = ".zolal-output";
 
 // ---- engine --------------------------------------------------------------------------------------------
 
-async function run(args, files, pass) {
-  const stdout = [], stderr = [];
-  const dir = new PreopenDirectory(".", new Map(
-    Object.entries(files).map(([n, d]) => [n, new File(d)])));
-  const wasi = new WASI(["zolal-cli", ...args], [`ZOLAL_PASS=${pass}`], [
-    new OpenFile(new File([])),
-    ConsoleStdout.lineBuffered(l => stdout.push(l)), ConsoleStdout.lineBuffered(l => stderr.push(l)), dir]);
-  const inst = await WebAssembly.instantiate(await wasm, { wasi_snapshot_preview1: wasi.wasiImport });
-  let code;
-  try { code = wasi.start(inst); } catch (e) { code = 1; stderr.push("error: " + e); }
-  return { code, stdout, stderr, files: dir.dir.contents };
+// Runs in its own worker (engine.js) so big files don't freeze the page. `files` maps names to Blobs; the
+// result's `files` maps each file the engine wrote to a Blob. `onProgress(done, total)` gets bytes sealed/opened.
+async function run(args, files, pass, onProgress) {
+  const module = await wasm;
+  const worker = new Worker("engine.js?v=dev", { type: "module" });
+  try {
+    return await new Promise(resolve => {
+      worker.onmessage = ({ data }) => data.progress ? onProgress?.(...data.progress) : resolve(data.done);
+      // Usually the device running out of memory.
+      worker.onerror = e => resolve({ code: 1, stdout: [], files: new Map(),
+        stderr: ["error: the device ran out of memory or the engine stopped (" + (e.message || "unknown") + ")"] });
+      worker.postMessage({ module, args, files, pass });
+    });
+  } finally {
+    worker.terminate();
+  }
 }
 
 // ---- small helpers -------------------------------------------------------------------------------------
 
 const bytes = f => f.arrayBuffer().then(b => new Uint8Array(b));
-const human = n => n < 1024 ? `${n} B` : n < 1048576 ? `${(n / 1024).toFixed(1)} KB` : `${(n / 1048576).toFixed(1)} MB`;
+const human = n => n < 1024 ? `${n} B` : n < 1048576 ? `${(n / 1024).toFixed(1)} KB`
+  : n < 1073741824 ? `${(n / 1048576).toFixed(1)} MB` : `${(n / 1073741824).toFixed(2)} GB`;
 const paint = () => new Promise(r => requestAnimationFrame(() => setTimeout(r, 30)));
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const el = (tag, cls, ...kids) => {
@@ -56,6 +60,13 @@ function show(box, kind, ...paras) {
 function busy(box, text) {
   box.className = "status busy";
   box.replaceChildren(el("span", "spinner"), text);
+}
+// A progress bar under the busy text; returns update(fraction, line).
+function bar(box) {
+  const meter = el("progress", ""), line = el("p", "small");
+  meter.max = 1;
+  box.append(meter, line);
+  return (fraction, text) => { meter.value = fraction; line.textContent = text; };
 }
 function download(name, data) {
   const a = document.createElement("a");
@@ -232,9 +243,9 @@ async function prepareCarrier(file) {
   const ext = (file.name.match(/\.([^.]+)$/)?.[1] ?? "").toUpperCase() || "this format";
   switch (kind) {
     case "jpeg": case "pdf": case "mp3": case "mp4":
-      return { data: await bytes(file), name: file.name };
+      return { data: file, name: file.name };
     case "mov":
-      return { data: movToMp4(await bytes(file)), name: baseName(file) + ".mp4",
+      return { data: await movToMp4(file), name: baseName(file) + ".mp4",
         note: "Converted from MOV to MP4; the video itself wasn't re-encoded." };
     case "image": {
       const { data, resized } = await toJpeg(file, ext, kind);
@@ -249,14 +260,14 @@ async function prepareCarrier(file) {
 }
 
 // Same bytes with the file-type brands changed from QuickTime to MP4. Every box keeps its size, so nothing
-// inside the file moves and the video's own offsets stay valid.
-function movToMp4(data) {
-  const out = data.slice();
-  const size = new DataView(out.buffer).getUint32(0);
+// inside the file moves and the video's own offsets stay valid. Only the first box changes, so only it is read.
+async function movToMp4(file) {
+  const size = new DataView((await bytes(file.slice(0, 4))).buffer).getUint32(0);
+  const out = await bytes(file.slice(0, size));
   const put = (at, s) => { for (let i = 0; i < 4; i++) out[at + i] = s.charCodeAt(i); };
   put(8, "mp42");
-  for (let at = 16; at + 4 <= Math.min(size, out.length); at += 4) if (ascii(out, at, at + 4) === "qt  ") put(at, "isom");
-  return out;
+  for (let at = 16; at + 4 <= out.length; at += 4) if (ascii(out, at, at + 4) === "qt  ") put(at, "isom");
+  return new Blob([out, file.slice(size)]);
 }
 
 // libheif (vendor/libheif, LGPL-3.0, loaded unmodified as its own file) decodes HEIC where the browser can't:
@@ -327,7 +338,7 @@ async function toJpeg(file, ext, kind) {
   img.close();
   const blob = await new Promise(r => canvas.toBlob(r, "image/jpeg", 0.92));
   if (!blob) throw new Error("Couldn't convert this photo to JPEG. Convert it first and try again.");
-  return { data: await bytes(blob), resized: scale < 1 };
+  return { data: blob, resized: scale < 1 };
 }
 
 // ---- hide ----------------------------------------------------------------------------------------------
@@ -344,6 +355,14 @@ const VERDICT = {
 };
 
 const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
+
+// How many payload files are fully sealed after `done` of `total` bundle bytes. The bundle is a small manifest
+// followed by the files back to back, in order (zolal-core's payload/mod.rs). Returns [finished, left].
+function filesDone(done, total, sizes) {
+  let into = done - (total - sizes.reduce((a, b) => a + b, 0)), n = 0;
+  while (n < sizes.length && sizes[n] <= into) into -= sizes[n++];
+  return [n, sizes.length - n];
+}
 
 $("hide").onclick = async () => {
   if (hideMode() === "mark") return hideMark();
@@ -367,32 +386,36 @@ $("hide").onclick = async () => {
       return show(box, "err", [strong("Can't use this cover file. "), e.message]);
     }
     busy(box, "Encrypting and hiding…");
+    const update = bar(box);
     await paint();
 
     const items = [...(hasMessage ? [{ name: MESSAGE }] : []), ...payloads];
     const names = uniqueNames(items);
     const files = { [CARRIER]: cover.data };
-    for (let i = 0; i < items.length; i++) {
-      files[names[i]] = items[i] instanceof Blob ? await bytes(items[i]) : new TextEncoder().encode(message);
-    }
-    const r = await run(["hide", CARRIER, OUTPUT, ...names.map(n => "./" + n)], files, pass);
+    for (let i = 0; i < items.length; i++) files[names[i]] = items[i] instanceof Blob ? items[i] : new Blob([message]);
+    const sizes = names.map(n => files[n].size);
+    const r = await run(["hide", CARRIER, OUTPUT, ...names.map(n => "./" + n)], files, pass, (done, total) => {
+      const [finished, left] = filesDone(done, total, sizes);
+      update(done / total, `${human(done)} of ${human(total)}` +
+        (textMode ? "" : ` · ${finished} of ${plural(sizes.length, "file")} done, ${left} left`));
+    });
     const out = r.files.get(OUTPUT);
     if (r.code !== 0 || !out) {
       const msg = r.stderr.filter(l => l.startsWith("error: ")).map(l => l.slice(7)).join(" ") || "Something went wrong.";
       return show(box, "err", [strong("Couldn't hide them. "), msg[0].toUpperCase() + msg.slice(1)]);
     }
-    download(cover.name, out.data);
+    download(cover.name, out);
 
     const what = hasMessage ? "your text" : plural(payloads.length, "file");
     const m = r.stdout.join("\n").match(/size .+ -> .+ \(x[\d.]+, (\w+)\)/);
     const [kind, note] = VERDICT[m?.[1]] ?? VERDICT.Natural;
     const again = el("button", "again", `Download ${cover.name} again`);
-    again.onclick = () => download(cover.name, out.data);
+    again.onclick = () => download(cover.name, out);
     show(box, kind,
       [strong("Done. "), `${what[0].toUpperCase() + what.slice(1)} ${payloads.length > 1 ? "are" : "is"} ` +
         `hidden in ${cover.name}, which has been downloaded.`],
       ...(cover.note ? [el("p", "small", cover.note)] : []),
-      el("p", "small", `${human(cover.data.length)} → ${human(out.data.length)}. ${note}`),
+      el("p", "small", `${human(cover.data.size)} → ${human(out.size)}. ${note}`),
       el("p", "small", "Remember: send it as a file or document (or in a .zip), not as a photo or video. " +
         "WhatsApp, Telegram and other chat apps compress photos and videos, and that deletes what's hidden."),
       again);
@@ -415,8 +438,10 @@ $("reveal").onclick = async () => {
   const started = performance.now();
   await paint();
   try {
-    const r = await run(["reveal", CARRIER, "."], { [CARRIER]: await bytes(carrier) }, pass);
-    const found = [...r.files].filter(([n, f]) => n !== CARRIER && f instanceof File);
+    const update = bar(box);
+    const r = await run(["reveal", CARRIER, "."], { [CARRIER]: carrier }, pass,
+      (done, total) => update(done / total, `${human(done)} of ${human(total)}`));
+    const found = [...r.files].filter(([n]) => n !== CARRIER);
     if (r.code !== 0 || !found.length) {
       await sleep(REVEAL_MIN_MS - (performance.now() - started));
       return show(box, "err", [strong("Nothing could be opened. "),
@@ -428,12 +453,12 @@ $("reveal").onclick = async () => {
     const rest = found.filter(([n]) => n !== MESSAGE);
     const list = el("ul", "files", ...rest.map(([name, f]) => {
       const b = el("button", "", "Download");
-      b.onclick = () => download(name, f.data);
-      return el("li", "", el("span", "name", name), el("span", "size", human(f.data.length)), b);
+      b.onclick = () => download(name, f);
+      return el("li", "", el("span", "name", name), el("span", "size", human(f.size)), b);
     }));
     const what = [msg && "text", rest.length && plural(rest.length, "file")].filter(Boolean).join(" and ");
     show(box, "ok", [strong("Found "), what + "."],
-      ...(msg ? [el("div", "message", new TextDecoder().decode(msg[1].data))] : []),
+      ...(msg ? [el("div", "message", await msg[1].text())] : []),
       ...(rest.length ? [list] : []));
   } finally {
     button.disabled = false;
