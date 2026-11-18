@@ -459,11 +459,79 @@ $("reveal").onclick = async () => {
     const what = [msg && "text", rest.length && plural(rest.length, "file")].filter(Boolean).join(" and ");
     show(box, "ok", [strong("Found "), what + "."],
       ...(msg ? [el("div", "message", await msg[1].text())] : []),
-      ...(rest.length ? [list] : []));
+      ...(rest.length ? [list] : []),
+      ...(rest.length > 1 ? [zipButton(rest, baseName(carrier) + " files.zip")] : []));
   } finally {
     button.disabled = false;
   }
 };
+
+// ---- download all as one zip --------------------------------------------------------------------------
+//
+// Files are stored, not compressed: what people hide is mostly photos and videos, which don't shrink. No ZIP64,
+// so up to 4 GB in all.
+
+const CRC = new Uint32Array(256).map((_, n) => {
+  for (let k = 0; k < 8; k++) n = n & 1 ? 0xEDB88320 ^ (n >>> 1) : n >>> 1;
+  return n;
+});
+async function crc32(blob, onChunk) {
+  let c = ~0;
+  for (let at = 0; at < blob.size; at += 8 << 20) {  // in pieces, so the page stays responsive
+    const b = await bytes(blob.slice(at, at + (8 << 20)));
+    for (let i = 0; i < b.length; i++) c = CRC[(c ^ b[i]) & 255] ^ (c >>> 8);
+    onChunk(b.length);
+  }
+  return ~c >>> 0;
+}
+// Little-endian fields given as [width, value] pairs.
+function le(...fields) {
+  const out = new Uint8Array(fields.reduce((s, [w]) => s + w, 0)), v = new DataView(out.buffer);
+  let at = 0;
+  for (const [w, x] of fields) { w === 2 ? v.setUint16(at, x, true) : v.setUint32(at, x, true); at += w; }
+  return out;
+}
+// [[name, Blob], ...] → a zip Blob. `onProgress(fraction)` while checksums are computed.
+async function zip(files, onProgress) {
+  const total = files.reduce((s, [, b]) => s + b.size, 0);
+  if (total + files.length * 1024 >= 2 ** 32) throw new Error("Too big for one zip. Download the files one by one.");
+  const d = new Date();
+  const time = d.getHours() << 11 | d.getMinutes() << 5 | d.getSeconds() >> 1;
+  const date = (d.getFullYear() - 1980) << 9 | (d.getMonth() + 1) << 5 | d.getDate();
+  const parts = [], central = [];
+  let done = 0, offset = 0;
+  for (const [name, blob] of files) {
+    const n = new TextEncoder().encode(name);
+    const crc = await crc32(blob, k => onProgress((done += k) / total));
+    // version 2.0, UTF-8 names, stored, time, date, crc, sizes, name length, no extra field
+    const common = [[2, 20], [2, 0x0800], [2, 0], [2, time], [2, date], [4, crc], [4, blob.size], [4, blob.size],
+      [2, n.length], [2, 0]];
+    parts.push(le([4, 0x04034b50], ...common), n, blob);
+    central.push(le([4, 0x02014b50], [2, 20], ...common, [2, 0], [2, 0], [2, 0], [4, 0], [4, offset]), n);
+    offset += 30 + n.length + blob.size;
+  }
+  const size = central.reduce((s, c) => s + c.length, 0);
+  return new Blob([...parts, ...central,
+    le([4, 0x06054b50], [2, 0], [2, 0], [2, files.length], [2, files.length], [4, size], [4, offset], [2, 0])]);
+}
+function zipButton(files, name) {
+  const label = "Download all as one .zip";
+  const b = el("button", "again", label);
+  let made = null;
+  b.onclick = async () => {
+    b.disabled = true;
+    try {
+      made ??= await zip(files, f => { b.textContent = `Making the zip… ${Math.floor(f * 100)}%`; });
+      download(name, made);
+      b.textContent = label;
+    } catch (e) {
+      b.textContent = e.message;
+    } finally {
+      b.disabled = false;
+    }
+  };
+  return b;
+}
 
 // ---- photo mark ----------------------------------------------------------------------------------------
 //
